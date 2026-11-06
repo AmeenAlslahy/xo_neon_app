@@ -99,13 +99,20 @@ class MatchEngine {
   void tick([Duration? delta]) {
     if (_state.phase != MatchPhase.inProgress) return;
     if (!_state.isTimerEnabled) return;
+    if (_roundResultRecorded) return;
 
     final now = clock();
     final elapsed = delta ??
         (_lastTickTime != null ? now.difference(_lastTickTime!) : Duration.zero);
-    _lastTickTime = now;
 
+    // Stale/backward clock sample (DateTime.now is not guaranteed monotonic):
+    // contributes no deduction and must not rewind the anchor, otherwise the
+    // next honest sample would re-count an already-processed period.
     if (elapsed <= Duration.zero) return;
+
+    if (_lastTickTime == null || now.isAfter(_lastTickTime!)) {
+      _lastTickTime = now;
+    }
 
     final activePlayer = _state.currentTurnPlayer;
     if (activePlayer == Player.x) {
@@ -167,12 +174,28 @@ class MatchEngine {
 
     final moveTimestamp = timestamp ?? clock();
 
-    // 1. Process elapsed time up to move execution
+    // 1. Process elapsed time up to move execution.
+    //
+    // Stale-sample policy: the engine's own last processed instant
+    // ([_lastTickTime]) is the authoritative time anchor. A timestamp at or
+    // before the anchor (out-of-order client stamp, or a backward system-clock
+    // jump — DateTime.now is not monotonic) carries zero deductible time,
+    // refunds no balance, and must not rewind the anchor. Known wall-clock
+    // limits that this policy does NOT solve: a backward jump landing AFTER
+    // the anchor is measured as a small honest sample, so a late move may
+    // slip past real expiry until the engine's next observation; and a
+    // forward jump is deducted fully, so a premature timeout is possible.
+    // Durable fix (deferred to the architectural batch): inject a monotonic
+    // TimeSource (Stopwatch-based) instead of wall-clock samples.
     if (_state.isTimerEnabled) {
-      final elapsed = _lastTickTime != null
-          ? moveTimestamp.difference(_lastTickTime!)
+      final anchor = _lastTickTime;
+      final isStale = anchor != null && !moveTimestamp.isAfter(anchor);
+      final elapsed = (anchor != null && !isStale)
+          ? moveTimestamp.difference(anchor)
           : Duration.zero;
-      _lastTickTime = moveTimestamp;
+      if (!isStale) {
+        _lastTickTime = moveTimestamp;
+      }
 
       final activePlayer = _state.currentTurnPlayer;
       if (activePlayer == Player.x) {
@@ -195,36 +218,44 @@ class MatchEngine {
     }
 
     // 2. Execute board move on inner engine
-    _roundEngine.makeMove(position, timestamp: moveTimestamp);
-    _state = _state.copyWith(roundState: _roundEngine.state);
+    try {
+      _roundEngine.makeMove(position, timestamp: moveTimestamp);
+      _state = _state.copyWith(roundState: _roundEngine.state);
 
-    // 3. Check for round conclusion
-    if (_roundEngine.isGameOver && !_roundResultRecorded) {
-      _roundResultRecorded = true;
-      _stopTicker();
+      // 3. Check for round conclusion
+      if (_roundEngine.isGameOver && !_roundResultRecorded) {
+        _roundResultRecorded = true;
+        _stopTicker();
 
-      if (_roundEngine.isWon) {
-        final winner = _roundEngine.winner!;
-        final newScoreX = winner == Player.x ? _state.scoreX + 1 : _state.scoreX;
-        final newScoreO = winner == Player.o ? _state.scoreO + 1 : _state.scoreO;
+        if (_roundEngine.isWon) {
+          final winner = _roundEngine.winner!;
+          final newScoreX = winner == Player.x ? _state.scoreX + 1 : _state.scoreX;
+          final newScoreO = winner == Player.o ? _state.scoreO + 1 : _state.scoreO;
 
-        _state = _state.copyWith(
-          scoreX: newScoreX,
-          scoreO: newScoreO,
-          roundWinner: winner,
-          roundEndReason: RoundEndReason.win,
-          phase: MatchPhase.roundEnded,
-        );
-      } else if (_roundEngine.isDraw) {
-        _state = _state.copyWith(
-          roundWinner: null,
-          roundEndReason: RoundEndReason.draw,
-          phase: MatchPhase.roundEnded,
-        );
+          _state = _state.copyWith(
+            scoreX: newScoreX,
+            scoreO: newScoreO,
+            roundWinner: winner,
+            roundEndReason: RoundEndReason.win,
+            phase: MatchPhase.roundEnded,
+          );
+        } else if (_roundEngine.isDraw) {
+          _state = _state.copyWith(
+            roundWinner: null,
+            roundEndReason: RoundEndReason.draw,
+            phase: MatchPhase.roundEnded,
+          );
+        }
       }
-    }
 
-    _notifyListeners();
+      _notifyListeners();
+    } catch (e) {
+      // Invalid move: the board, scores, and current turn remain unchanged.
+      // However, elapsed time up to move reception was deducted and
+      // listeners MUST be notified so internal state remains consistent.
+      _notifyListeners();
+      rethrow;
+    }
   }
 
   /// Advances to the next round, alternating the starting player,
@@ -232,6 +263,11 @@ class MatchEngine {
   ///
   /// If the current round was the final round, concludes the match.
   void nextRound() {
+    // Guard: advancing is only legal from a concluded round. Repeated or
+    // racing invocations (banner auto-fire overlapping a manual tap) become
+    // safe no-ops instead of skipping a round or wiping an active board.
+    if (_state.phase != MatchPhase.roundEnded) return;
+
     if (_state.isFinalRound) {
       finalizeMatch();
       return;
@@ -257,8 +293,7 @@ class MatchEngine {
       roundStartingPlayer: nextStarter,
       roundState: _roundEngine.state,
       phase: MatchPhase.inProgress,
-      roundEndReason: null,
-      roundWinner: null,
+      clearRoundResult: true,
       remainingTimeX: resetTime,
       remainingTimeO: resetTime,
     );
@@ -274,6 +309,11 @@ class MatchEngine {
 
   /// Concludes the entire match, calculating the overall match winner or draw.
   void finalizeMatch() {
+    if (_state.phase == MatchPhase.matchEnded) return;
+    if (_state.phase != MatchPhase.roundEnded || !_state.isFinalRound) {
+      return;
+    }
+
     _stopTicker();
 
     Player? overallWinner;
@@ -304,14 +344,20 @@ class MatchEngine {
         final active = _state.currentTurnPlayer;
         if (active == Player.x) {
           final rem = _state.remainingTimeX - elapsed;
-          _state = _state.copyWith(
-            remainingTimeX: rem > Duration.zero ? rem : Duration.zero,
-          );
+          if (rem <= Duration.zero) {
+            _state = _state.copyWith(remainingTimeX: Duration.zero);
+            _handleTimeout(timedOutPlayer: Player.x);
+            return;
+          }
+          _state = _state.copyWith(remainingTimeX: rem);
         } else {
           final rem = _state.remainingTimeO - elapsed;
-          _state = _state.copyWith(
-            remainingTimeO: rem > Duration.zero ? rem : Duration.zero,
-          );
+          if (rem <= Duration.zero) {
+            _state = _state.copyWith(remainingTimeO: Duration.zero);
+            _handleTimeout(timedOutPlayer: Player.o);
+            return;
+          }
+          _state = _state.copyWith(remainingTimeO: rem);
         }
       }
     }
@@ -325,6 +371,15 @@ class MatchEngine {
   /// Resumes gameplay and timers from paused state.
   void resume() {
     if (_state.phase != MatchPhase.paused) return;
+
+    if (_state.isTimerEnabled) {
+      final active = _state.currentTurnPlayer;
+      final rem = active == Player.x ? _state.remainingTimeX : _state.remainingTimeO;
+      if (rem <= Duration.zero) {
+        _handleTimeout(timedOutPlayer: active);
+        return;
+      }
+    }
 
     _lastTickTime = clock();
     _state = _state.copyWith(phase: MatchPhase.inProgress);
@@ -352,8 +407,7 @@ class MatchEngine {
     _state = _state.copyWith(
       roundState: _roundEngine.state,
       phase: MatchPhase.inProgress,
-      roundEndReason: null,
-      roundWinner: null,
+      clearRoundResult: true,
       remainingTimeX: resetTime,
       remainingTimeO: resetTime,
     );

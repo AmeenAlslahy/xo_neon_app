@@ -95,10 +95,14 @@ class MatchState {
     GameState? roundState,
     MatchPhase? phase,
     RoundEndReason? roundEndReason,
+    bool clearRoundEndReason = false,
     Player? roundWinner,
+    bool clearRoundWinner = false,
+    bool clearRoundResult = false,
     Duration? remainingTimeX,
     Duration? remainingTimeO,
     Player? matchWinner,
+    bool clearMatchWinner = false,
   }) {
     return MatchState(
       config: config ?? this.config,
@@ -108,11 +112,15 @@ class MatchState {
       roundStartingPlayer: roundStartingPlayer ?? this.roundStartingPlayer,
       roundState: roundState ?? this.roundState,
       phase: phase ?? this.phase,
-      roundEndReason: roundEndReason ?? this.roundEndReason,
-      roundWinner: roundWinner ?? this.roundWinner,
+      roundEndReason: (clearRoundResult || clearRoundEndReason)
+          ? null
+          : (roundEndReason ?? this.roundEndReason),
+      roundWinner: (clearRoundResult || clearRoundWinner)
+          ? null
+          : (roundWinner ?? this.roundWinner),
       remainingTimeX: remainingTimeX ?? this.remainingTimeX,
       remainingTimeO: remainingTimeO ?? this.remainingTimeO,
-      matchWinner: matchWinner ?? this.matchWinner,
+      matchWinner: clearMatchWinner ? null : (matchWinner ?? this.matchWinner),
     );
   }
 

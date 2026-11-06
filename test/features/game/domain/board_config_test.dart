@@ -142,6 +142,13 @@ void main() {
           throwsA(isA<InvalidBoardConfigException>()),
         );
       });
+
+      test('BUG REPRO: default constructor BoardConfig(...) rejects invalid dimensions and streak at runtime', () {
+        expect(() => BoardConfig(rows: 0, cols: 3, winStreak: 3), throwsA(isA<InvalidBoardConfigException>()));
+        expect(() => BoardConfig(rows: 3, cols: -1, winStreak: 3), throwsA(isA<InvalidBoardConfigException>()));
+        expect(() => BoardConfig(rows: 3, cols: 3, winStreak: 0), throwsA(isA<InvalidBoardConfigException>()));
+        expect(() => BoardConfig(rows: 3, cols: 3, winStreak: 4), throwsA(isA<InvalidBoardConfigException>()));
+      });
     });
 
     group('Value Equality & HashCode', () {

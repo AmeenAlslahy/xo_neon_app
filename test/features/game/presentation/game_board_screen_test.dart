@@ -43,15 +43,27 @@ void main() {
     );
   }
 
-  /// Helper to tap cell at (row, col) via semantics label
-  Future<void> tapCell(WidgetTester tester, int row, int col, {bool isArabic = true}) async {
+  /// Helper to tap cell at (row, col) via semantics label.
+  /// [settle] = false advances ZERO fake time (tap + single render pump),
+  /// for timing-deterministic race tests.
+  Future<void> tapCell(
+    WidgetTester tester,
+    int row,
+    int col, {
+    bool isArabic = true,
+    bool settle = true,
+  }) async {
     final label = isArabic
         ? 'الخانة: الصف ${row + 1}، العمود ${col + 1}'
         : 'Cell row ${row + 1} column ${col + 1}';
     final cellFinder = find.bySemanticsLabel(RegExp('^${RegExp.escape(label)}(?:\\D|\$)'));
     expect(cellFinder, findsOneWidget, reason: 'Could not find cell ($row, $col) with label $label');
     await tester.tap(cellFinder, warnIfMissed: false);
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pump();
+    }
   }
 
   group('GameBoardScreen - Clean UI & Removal of Mock Data', () {
@@ -488,6 +500,224 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
+      expect(find.byType(GameOverDialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('GameBoardScreen - Final Round Delayed Finalize & Transition Safety', () {
+    /// Wins one round of a 3-round match for X. When [xStarts] is false, O
+    /// opens the round and X still wins (mirrors the engine test sequences).
+    Future<void> winRoundForX(WidgetTester tester, {required bool xStarts}) async {
+      if (xStarts) {
+        await tapCell(tester, 0, 0); // X
+        await tapCell(tester, 1, 0); // O
+        await tapCell(tester, 0, 1); // X
+        await tapCell(tester, 1, 1); // O
+        await tapCell(tester, 0, 2); // X wins
+      } else {
+        await tapCell(tester, 1, 0); // O
+        await tapCell(tester, 0, 0); // X
+        await tapCell(tester, 1, 1); // O
+        await tapCell(tester, 0, 1); // X
+        await tapCell(tester, 2, 0); // O
+        await tapCell(tester, 0, 2); // X wins
+      }
+    }
+
+    /// Drives a 3-round match to the point where the FINAL round has just been
+    /// won and the 1200ms finalize delay is pending (no banner on final round).
+    Future<void> reachFinalRoundEnd(WidgetTester tester) async {
+      final matchConfig = MatchConfig(
+        boardConfig: BoardConfig.grid3x3,
+        totalRounds: 3,
+      );
+      await tester.pumpWidget(buildTestableWidget(matchConfig: matchConfig));
+      await tester.pumpAndSettle();
+
+      await winRoundForX(tester, xStarts: true); // Round 1 (X starts)
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('الجولة التالية ⏩').first);
+      await tester.pumpAndSettle();
+
+      await winRoundForX(tester, xStarts: false); // Round 2 (O starts)
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('الجولة التالية ⏩').first);
+      await tester.pumpAndSettle();
+
+      await winRoundForX(tester, xStarts: true); // Round 3 (final, X starts)
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('POSITIVE: final round ending without interruption shows the final dialog after the delay', (tester) async {
+      await reachFinalRoundEnd(tester);
+
+      // Not yet: the finalize delay is pending
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      await tester.pump(const Duration(milliseconds: 1400));
+      await tester.pumpAndSettle();
+
+      // The dialog MUST appear for the legitimately ended match
+      expect(find.byType(GameOverDialog), findsOneWidget);
+      expect(find.text('النتيجة النهائية للمباراة'), findsOneWidget);
+    });
+
+    testWidgets('the correct final result is presented exactly once and never duplicated', (tester) async {
+      await reachFinalRoundEnd(tester);
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      await tester.pump(const Duration(milliseconds: 1400));
+      await tester.pumpAndSettle();
+
+      // Exactly one presentation of the correct final result
+      expect(find.byType(GameOverDialog), findsOneWidget);
+      expect(find.text('النتيجة النهائية للمباراة'), findsOneWidget);
+
+      // Pumping far past the delay must not duplicate or re-trigger anything
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.byType(GameOverDialog), findsOneWidget);
+      expect(find.text('النتيجة النهائية للمباراة'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('REPRO: resetting the round inside the finalize delay window must NOT surface a stale dialog', (tester) async {
+      await reachFinalRoundEnd(tester);
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      // Player resets the round during the delay window via the AppBar
+      // replay button (no confirmation needed: round is over).
+      await tester.tap(find.byIcon(Icons.refresh_rounded));
+      await tester.pump(); // drain microtasks
+      await tester.pump(); // render the rebuilt, active round
+
+      // Round 3 is live again (fresh board, X starts, scores preserved)
+      expect(find.text('الجولة ٣ من ٣'), findsOneWidget);
+      expect(find.text('الدور الآن'), findsOneWidget);
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      // The old finalize delay now fires
+      await tester.pump(const Duration(milliseconds: 1400));
+      await tester.pumpAndSettle();
+
+      // No stale final-result dialog may appear over the fresh round
+      expect(find.byType(GameOverDialog), findsNothing);
+      expect(find.text('النتيجة النهائية للمباراة'), findsNothing);
+      expect(find.text('الجولة ٣ من ٣'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('exiting the screen inside the finalize delay window must not surface the dialog afterwards', (tester) async {
+      // Single-round match: its only round is the final one.
+      await tester.pumpWidget(buildTestableWidget());
+      await tester.pumpAndSettle();
+
+      await winRoundForX(tester, xStarts: true);
+      await tester.pumpAndSettle();
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      // Leave via the bottom-bar exit with confirmation.
+      await tester.tap(find.text('الرئيسية'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('مغادرة'));
+      await tester.pumpAndSettle();
+
+      // The stale finalize delay fires after the screen is gone.
+      await tester.pump(const Duration(milliseconds: 1400));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(GameOverDialog), findsNothing);
+      expect(find.text('النتيجة النهائية للمباراة'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('REPRO: banner skip and bottom next-round button fired together advance exactly one round', (tester) async {
+      final matchConfig = MatchConfig(
+        boardConfig: BoardConfig.grid3x3,
+        totalRounds: 3,
+      );
+      await tester.pumpWidget(buildTestableWidget(matchConfig: matchConfig));
+      await tester.pumpAndSettle();
+
+      await winRoundForX(tester, xStarts: true);
+      await tester.pumpAndSettle();
+      expect(find.byType(RoundEndBanner), findsOneWidget);
+
+      // Banner skip + bottom "next round" button dispatched in the same frame
+      // (simulates the auto-countdown callback racing a manual player tap).
+      await tester.tap(find.text('الجولة التالية ⏩').first);
+      await tester.tap(find.text('الجولة التالية ⏩').last);
+      await tester.pumpAndSettle();
+
+      // Exactly ONE round advanced: Round 2, never Round 3.
+      expect(find.text('الجولة ٢ من ٣'), findsOneWidget);
+      expect(find.text('الجولة ٣ من ٣'), findsNothing);
+      expect(find.byType(RoundEndBanner), findsNothing);
+    });
+
+    testWidgets('REPRO: re-winning the reset final round presents its own result once, on its own delay — never the stale one early', (tester) async {
+      final matchConfig = MatchConfig(
+        boardConfig: BoardConfig.grid3x3,
+        totalRounds: 3,
+      );
+      await tester.pumpWidget(buildTestableWidget(matchConfig: matchConfig));
+      await tester.pumpAndSettle();
+
+      // Navigate to the final round start (rounds 1-2 via banner skips).
+      await winRoundForX(tester, xStarts: true);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('الجولة التالية ⏩').first);
+      await tester.pumpAndSettle();
+      await winRoundForX(tester, xStarts: false);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('الجولة التالية ⏩').first);
+      await tester.pumpAndSettle();
+
+      // t=0: win the FINAL round with zero fake-time advance — the finalize
+      // delay is scheduled exactly now.
+      await tapCell(tester, 0, 0, settle: false); // X
+      await tapCell(tester, 1, 0, settle: false); // O
+      await tapCell(tester, 0, 1, settle: false); // X
+      await tapCell(tester, 1, 1, settle: false); // O
+      await tapCell(tester, 0, 2, settle: false); // X wins the final round
+      await tester.pump();
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      // t=400: player resets the round before any dialog appears.
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.byIcon(Icons.refresh_rounded));
+      await tester.pump(); // drain microtasks (resetCurrentRound runs)
+      await tester.pump(); // rebuild: round 3 active again
+      expect(find.text('الجولة ٣ من ٣'), findsOneWidget);
+      expect(find.text('الدور الآن'), findsOneWidget);
+
+      // t=700: brief pause, then re-win the reset round with zero-time taps.
+      await tester.pump(const Duration(milliseconds: 300));
+      await tapCell(tester, 0, 0, settle: false); // X
+      await tapCell(tester, 1, 0, settle: false); // O
+      await tapCell(tester, 0, 1, settle: false); // X
+      await tapCell(tester, 1, 1, settle: false); // O
+      await tapCell(tester, 0, 2, settle: false); // X wins again
+      await tester.pump();
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      // t=1300: the STALE delay (due at t=1200) must NOT present the new
+      // round's result early — it was invalidated by the reset.
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.byType(GameOverDialog), findsNothing,
+          reason: 'The stale finalize scheduling must be canceled by the round reset');
+
+      // t=2000: the NEW result presents exactly once, per its OWN delay
+      // (scheduled at t=700, due at t=1900).
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+      expect(find.byType(GameOverDialog), findsOneWidget);
+      expect(find.text('النتيجة النهائية للمباراة'), findsOneWidget);
+
+      // Pumping further must never duplicate the presentation.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
       expect(find.byType(GameOverDialog), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

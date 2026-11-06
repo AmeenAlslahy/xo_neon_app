@@ -9,21 +9,46 @@ class BoardConfig {
   final int cols;
   final int winStreak;
 
-  const BoardConfig({
+  const BoardConfig._({
     required this.rows,
     required this.cols,
     required this.winStreak,
   });
+
+  /// Creates a validated board configuration at runtime in both debug and release modes.
+  factory BoardConfig({
+    required int rows,
+    required int cols,
+    required int winStreak,
+  }) {
+    if (rows < 1 || cols < 1) {
+      throw InvalidBoardConfigException(
+        'Board dimensions must be at least 1x1. Received: ${rows}x$cols.',
+      );
+    }
+    if (winStreak < 1) {
+      throw InvalidBoardConfigException(
+        'Win streak must be at least 1. Received: $winStreak.',
+      );
+    }
+    final maxDimension = math.max(rows, cols);
+    if (winStreak > maxDimension) {
+      throw InvalidBoardConfigException(
+        'Win streak ($winStreak) cannot exceed maximum board dimension ($maxDimension).',
+      );
+    }
+    return BoardConfig._(rows: rows, cols: cols, winStreak: winStreak);
+  }
 
   /// The four officially authorized grid presets:
   /// - 3x3: 3 consecutive marks to win
   /// - 6x6: 4 consecutive marks to win
   /// - 9x9: 5 consecutive marks to win
   /// - 11x11: 6 consecutive marks to win
-  static const BoardConfig grid3x3 = BoardConfig(rows: 3, cols: 3, winStreak: 3);
-  static const BoardConfig grid6x6 = BoardConfig(rows: 6, cols: 6, winStreak: 4);
-  static const BoardConfig grid9x9 = BoardConfig(rows: 9, cols: 9, winStreak: 5);
-  static const BoardConfig grid11x11 = BoardConfig(rows: 11, cols: 11, winStreak: 6);
+  static const BoardConfig grid3x3 = BoardConfig._(rows: 3, cols: 3, winStreak: 3);
+  static const BoardConfig grid6x6 = BoardConfig._(rows: 6, cols: 6, winStreak: 4);
+  static const BoardConfig grid9x9 = BoardConfig._(rows: 9, cols: 9, winStreak: 5);
+  static const BoardConfig grid11x11 = BoardConfig._(rows: 11, cols: 11, winStreak: 6);
 
   /// Centralized list of all authorized configurations for UI and matchmaking.
   static const List<BoardConfig> authorizedPresets = [
@@ -72,25 +97,7 @@ class BoardConfig {
     required int rows,
     required int cols,
     required int winStreak,
-  }) {
-    if (rows < 1 || cols < 1) {
-      throw InvalidBoardConfigException(
-        'Board dimensions must be at least 1x1. Received: ${rows}x$cols.',
-      );
-    }
-    if (winStreak < 1) {
-      throw InvalidBoardConfigException(
-        'Win streak must be at least 1. Received: $winStreak.',
-      );
-    }
-    final maxDimension = math.max(rows, cols);
-    if (winStreak > maxDimension) {
-      throw InvalidBoardConfigException(
-        'Win streak ($winStreak) cannot exceed maximum board dimension ($maxDimension).',
-      );
-    }
-    return BoardConfig(rows: rows, cols: cols, winStreak: winStreak);
-  }
+  }) = BoardConfig;
 
   int get totalCells => rows * cols;
   bool get isSquare => rows == cols;

@@ -10,6 +10,13 @@ import '../widgets/player_turn_header.dart';
 import '../widgets/round_end_banner.dart';
 
 /// Screen hosting a cyber-neon local match, driven authoritatively by [MatchEngine].
+///
+/// Agreed priorities recorded for the next architectural batch (NOT to be
+/// started here): (1) inject a monotonic TimeSource (Stopwatch-based) into
+/// MatchEngine, replacing wall-clock samples; (2) move the round/match
+/// transition pacing (this screen's finalize delay and RoundEndBanner's
+/// countdown) into the application layer so scheduling is deterministic and
+/// engine-owned.
 class GameBoardScreen extends StatefulWidget {
   final MatchConfig matchConfig;
   final bool isArabic;
@@ -33,6 +40,11 @@ class _GameBoardScreenState extends State<GameBoardScreen> with WidgetsBindingOb
   late MatchEngine _engine;
   bool _dialogPresentedForFinalMatch = false;
 
+  /// The single live finalize-scheduling operation. Canceled whenever the
+  /// round it was scheduled for stops being the concluded final round, so a
+  /// stale scheduling can never present a newer round's result early.
+  Timer? _finalizeDelayTimer;
+
   @override
   void initState() {
     super.initState();
@@ -52,6 +64,7 @@ class _GameBoardScreenState extends State<GameBoardScreen> with WidgetsBindingOb
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _finalizeDelayTimer?.cancel();
     _engine.removeListener(_onMatchStateChanged);
     _engine.dispose();
     super.dispose();
@@ -70,22 +83,42 @@ class _GameBoardScreenState extends State<GameBoardScreen> with WidgetsBindingOb
     if (!mounted) return;
     setState(() {});
 
+    // The round that a pending finalize delay was scheduled for no longer
+    // exists: a round reset or match restart moved the phase back to an
+    // active round. Cancel the stale scheduling operation.
+    if (state.phase == MatchPhase.inProgress) {
+      _finalizeDelayTimer?.cancel();
+      _finalizeDelayTimer = null;
+    }
+
     // When the final round completes, display the final match outcome dialog
     if (state.isMatchOver && !_dialogPresentedForFinalMatch) {
       _dialogPresentedForFinalMatch = true;
+      _finalizeDelayTimer?.cancel();
+      _finalizeDelayTimer = null;
       _presentFinalMatchDialog();
     } else if (state.isRoundOver && state.isFinalRound && !_dialogPresentedForFinalMatch) {
-      // Allow players to view the board first, then finalize match and show dialog
+      // Allow players to view the board first, then finalize match and show
+      // dialog. Only one live finalize delay at a time: a newer round
+      // conclusion supersedes any older scheduling.
+      _finalizeDelayTimer?.cancel();
       final reduceMotion = MediaQuery.of(context).disableAnimations;
       final delay = reduceMotion ? const Duration(milliseconds: 400) : const Duration(milliseconds: 1200);
 
-      Future.delayed(delay, () {
+      _finalizeDelayTimer = Timer(delay, () {
+        _finalizeDelayTimer = null;
         if (!mounted) return;
-        if (!_dialogPresentedForFinalMatch) {
-          _dialogPresentedForFinalMatch = true;
-          _engine.finalizeMatch();
-          _presentFinalMatchDialog();
+        if (_dialogPresentedForFinalMatch) return;
+        // Defense-in-depth result guard: finalize only if the engine still
+        // holds a concluded final round (match/round/phase checks).
+        if (_engine.phase != MatchPhase.roundEnded ||
+            !_engine.isFinalRound ||
+            _engine.isMatchOver) {
+          return;
         }
+        _dialogPresentedForFinalMatch = true;
+        _engine.finalizeMatch();
+        _presentFinalMatchDialog();
       });
     }
   }
