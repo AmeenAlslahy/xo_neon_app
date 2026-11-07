@@ -3,10 +3,10 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xo_neon_app/app/theme/neon_colors.dart';
 import 'package:xo_neon_app/app/theme/neon_theme.dart';
-import 'package:xo_neon_app/core/l10n/app_strings.dart';
 import 'package:xo_neon_app/features/game/domain/xo_engine.dart';
 import 'package:xo_neon_app/features/game/presentation/screens/game_setup_screen.dart';
 import 'package:xo_neon_app/features/game/presentation/screens/home_screen.dart';
@@ -36,26 +36,28 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
 
     await tester.pumpWidget(
-      MaterialApp(
-        theme: NeonTheme.darkTheme,
-        locale: const Locale('ar'),
-        supportedLocales: const [Locale('ar')],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        home: RepaintBoundary(
-          key: repaintKey,
-          child: MediaQuery(
-            data: MediaQueryData(
-              size: surfaceSize,
-              devicePixelRatio: 1.0,
-            ),
-            child: SizedBox(
-              width: surfaceSize.width,
-              height: surfaceSize.height,
-              child: child,
+      ProviderScope(
+        child: MaterialApp(
+          theme: NeonTheme.darkTheme,
+          locale: const Locale('ar'),
+          supportedLocales: const [Locale('ar')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          home: RepaintBoundary(
+            key: repaintKey,
+            child: MediaQuery(
+              data: MediaQueryData(
+                size: surfaceSize,
+                devicePixelRatio: 1.0,
+              ),
+              child: SizedBox(
+                width: surfaceSize.width,
+                height: surfaceSize.height,
+                child: child,
+              ),
             ),
           ),
         ),
@@ -90,7 +92,7 @@ void main() {
   testWidgets('Capture Screen 1: HomeScreen', (tester) async {
     await captureWidget(
       tester: tester,
-      child: const HomeScreen(isArabic: true),
+      child: const HomeScreen(),
       filename: '01_home_screen.png',
     );
   });
@@ -98,7 +100,7 @@ void main() {
   testWidgets('Capture Screen 2: GameSetupScreen with Rounds & Chess Clock Timer', (tester) async {
     await captureWidget(
       tester: tester,
-      child: const GameSetupScreen(isArabic: true),
+      child: const GameSetupScreen(),
       filename: '02_setup_screen.png',
     );
   });
@@ -529,7 +531,6 @@ void main() {
             scoreX: 2,
             scoreO: 1,
             matchWinner: Player.x,
-            strings: const AppStrings(isArabic: true),
             onRematch: () {},
             onViewBoard: () {},
             onExit: () {},

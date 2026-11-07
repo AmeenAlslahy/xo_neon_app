@@ -16,3 +16,4 @@ export 'models/move.dart';
 export 'models/player.dart';
 export 'models/timer_config.dart';
 export 'models/winning_line.dart';
+export 'time/time_source.dart';

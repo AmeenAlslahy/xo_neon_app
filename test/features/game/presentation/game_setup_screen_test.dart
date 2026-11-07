@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xo_neon_app/app/theme/neon_theme.dart';
 import 'package:xo_neon_app/features/game/presentation/screens/game_board_screen.dart';
@@ -7,16 +8,18 @@ import 'package:xo_neon_app/features/game/presentation/screens/game_setup_screen
 
 void main() {
   Widget buildTestableWidget({bool isArabic = true}) {
-    return MaterialApp(
-      theme: NeonTheme.darkTheme,
-      locale: Locale(isArabic ? 'ar' : 'en'),
-      supportedLocales: const [Locale('ar'), Locale('en')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      home: GameSetupScreen(isArabic: isArabic),
+    return ProviderScope(
+      child: MaterialApp(
+        theme: NeonTheme.darkTheme,
+        locale: Locale(isArabic ? 'ar' : 'en'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: const GameSetupScreen(),
+      ),
     );
   }
 

@@ -8,7 +8,7 @@ void main() {
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 3,
       );
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       expect(engine.currentRound, 1);
       expect(engine.scoreX, 0);
@@ -25,7 +25,7 @@ void main() {
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 3,
       );
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       // Round 1: X wins
       engine.makeMove(const Position(0, 0)); // X
@@ -88,7 +88,7 @@ void main() {
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 3,
       );
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       // Round 1: O wins
       engine.makeMove(const Position(2, 2)); // X
@@ -114,7 +114,7 @@ void main() {
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 1, // Single round match
       );
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       // Play a 3x3 draw
       // X O X
@@ -143,7 +143,7 @@ void main() {
 
     test('restartMatch resets to Round 1, zeroed scores, and starter X', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 3);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       engine.makeMove(const Position(0, 0)); // X
       engine.makeMove(const Position(1, 0)); // O
@@ -163,7 +163,7 @@ void main() {
 
   group('MatchEngine - Chess Clock Timer Mechanics', () {
     test('timer decrements only active player time and transfers clock after valid move', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
+      final time = FakeTimeSource();
       final config = MatchConfig(
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 1,
@@ -174,36 +174,32 @@ void main() {
         ),
       );
 
-      final engine = MatchEngine(
-        config: config,
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+      final engine = MatchEngine(config: config, timeSource: time);
 
       expect(engine.remainingTimeX, const Duration(seconds: 60));
       expect(engine.remainingTimeO, const Duration(seconds: 60));
 
       // Advance time by 5 seconds while X has turn
-      currentTime = currentTime.add(const Duration(seconds: 5));
+      time.advance(const Duration(seconds: 5));
       engine.tick();
       expect(engine.remainingTimeX, const Duration(seconds: 55));
       expect(engine.remainingTimeO, const Duration(seconds: 60)); // O was untouched!
 
       // X makes a valid move at second 7
-      currentTime = currentTime.add(const Duration(seconds: 2));
-      engine.makeMove(const Position(0, 0), timestamp: currentTime);
+      time.advance(const Duration(seconds: 2));
+      engine.makeMove(const Position(0, 0));
       expect(engine.remainingTimeX, const Duration(seconds: 53));
       expect(engine.currentTurnPlayer, Player.o); // Now O's turn!
 
       // Advance time by 4 seconds while O has turn
-      currentTime = currentTime.add(const Duration(seconds: 4));
+      time.advance(const Duration(seconds: 4));
       engine.tick();
       expect(engine.remainingTimeX, const Duration(seconds: 53)); // X untouched
       expect(engine.remainingTimeO, const Duration(seconds: 56)); // O decremented
     });
 
     test('invalid move does NOT transfer clock or change turn', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
+      final time = FakeTimeSource();
       final config = MatchConfig(
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 1,
@@ -214,28 +210,25 @@ void main() {
         ),
       );
 
-      final engine = MatchEngine(
-        config: config,
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+      final engine = MatchEngine(config: config, timeSource: time);
 
       // X plays (0, 0)
-      engine.makeMove(const Position(0, 0), timestamp: currentTime);
+      engine.makeMove(const Position(0, 0));
       expect(engine.currentTurnPlayer, Player.o);
 
-      // O tries to play on occupied cell (0, 0)
-      currentTime = currentTime.add(const Duration(seconds: 3));
+      // O tries to play on occupied cell (0, 0) after 3s on the clock
+      time.advance(const Duration(seconds: 3));
       expect(
-        () => engine.makeMove(const Position(0, 0), timestamp: currentTime),
+        () => engine.makeMove(const Position(0, 0)),
         throwsA(isA<CellAlreadyOccupiedException>()),
       );
-      // Turn MUST still be O's!
+      // Turn MUST still be O's, and the elapsed 3s slice stays deducted
       expect(engine.currentTurnPlayer, Player.o);
+      expect(engine.remainingTimeO, const Duration(seconds: 57));
     });
 
     test('player running out of time loses round and opponent receives 1 point', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
+      final time = FakeTimeSource();
       final config = MatchConfig(
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 3,
@@ -246,14 +239,10 @@ void main() {
         ),
       );
 
-      final engine = MatchEngine(
-        config: config,
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+      final engine = MatchEngine(config: config, timeSource: time);
 
       // Advance time by 16 seconds (exceeding X's 15 seconds)
-      currentTime = currentTime.add(const Duration(seconds: 16));
+      time.advance(const Duration(seconds: 16));
       engine.tick();
 
       expect(engine.isRoundOver, true);
@@ -265,7 +254,7 @@ void main() {
     });
 
     test('pause freezes timer without deducting time; resume continues with exact remaining time', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
+      final time = FakeTimeSource();
       final config = MatchConfig(
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 3,
@@ -276,14 +265,10 @@ void main() {
         ),
       );
 
-      final engine = MatchEngine(
-        config: config,
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+      final engine = MatchEngine(config: config, timeSource: time);
 
       // Consume 5s
-      currentTime = currentTime.add(const Duration(seconds: 5));
+      time.advance(const Duration(seconds: 5));
       engine.tick();
       expect(engine.remainingTimeX, const Duration(seconds: 25));
 
@@ -292,7 +277,7 @@ void main() {
       expect(engine.isPaused, true);
 
       // Time passes in background (e.g. 100 seconds!)
-      currentTime = currentTime.add(const Duration(seconds: 100));
+      time.advance(const Duration(seconds: 100));
       engine.tick(); // In paused state, ticks are ignored!
       expect(engine.remainingTimeX, const Duration(seconds: 25)); // Untouched!
 
@@ -302,13 +287,13 @@ void main() {
       expect(engine.remainingTimeX, const Duration(seconds: 25));
 
       // Another 5 seconds of active play
-      currentTime = currentTime.add(const Duration(seconds: 5));
+      time.advance(const Duration(seconds: 5));
       engine.tick();
       expect(engine.remainingTimeX, const Duration(seconds: 20));
     });
 
     test('deterministic behavior near timeout expiration', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
+      final time = FakeTimeSource();
       final config = MatchConfig(
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 1,
@@ -319,21 +304,17 @@ void main() {
         ),
       );
 
-      final engine = MatchEngine(
-        config: config,
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+      final engine = MatchEngine(config: config, timeSource: time);
 
       // Move arrives at exactly 9.9 seconds (0.1s before timeout): valid move!
-      currentTime = currentTime.add(const Duration(milliseconds: 9900));
-      engine.makeMove(const Position(0, 0), timestamp: currentTime);
+      time.advance(const Duration(milliseconds: 9900));
+      engine.makeMove(const Position(0, 0));
       expect(engine.isRoundOver, false);
       expect(engine.currentTurnPlayer, Player.o);
 
       // Move arrives at 10.1 seconds after clock expired: triggers timeout!
-      currentTime = currentTime.add(const Duration(milliseconds: 10100));
-      engine.makeMove(const Position(1, 0), timestamp: currentTime);
+      time.advance(const Duration(milliseconds: 10100));
+      engine.makeMove(const Position(1, 0));
       expect(engine.isRoundOver, true);
       expect(engine.roundEndReason, RoundEndReason.timeout);
       expect(engine.roundWinner, Player.x); // O timed out, X wins!
@@ -343,7 +324,7 @@ void main() {
   group('MatchEngine - Baseline Defect Reproduction & Edge Cases', () {
     test('BUG REPRO: roundWinner and roundEndReason MUST be cleared when transitioning to next round', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 3);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       // Round 1: X wins
       engine.makeMove(const Position(0, 0)); // X
@@ -368,7 +349,7 @@ void main() {
 
     test('BUG REPRO: roundWinner and roundEndReason MUST be cleared when resetting round after a win', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 3);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       // Round 1: X wins
       engine.makeMove(const Position(0, 0)); // X
@@ -390,7 +371,7 @@ void main() {
 
     test('BUG REPRO: finalizeMatch MUST be rejected if called during an active in-progress round', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 3);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       // Round 1 is in progress
       expect(engine.phase, MatchPhase.inProgress);
@@ -404,7 +385,7 @@ void main() {
     });
 
     test('BUG REPRO: invalid move decrements elapsed time and notifies listeners without granting extra time', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
+      final time = FakeTimeSource();
       final config = MatchConfig(
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 1,
@@ -415,11 +396,7 @@ void main() {
         ),
       );
 
-      final engine = MatchEngine(
-        config: config,
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+      final engine = MatchEngine(config: config, timeSource: time);
 
       var notificationCount = 0;
       MatchState? lastNotifiedState;
@@ -429,15 +406,15 @@ void main() {
       });
 
       // Valid move by X at t=5s
-      currentTime = currentTime.add(const Duration(seconds: 5));
-      engine.makeMove(const Position(0, 0), timestamp: currentTime);
+      time.advance(const Duration(seconds: 5));
+      engine.makeMove(const Position(0, 0));
       expect(engine.remainingTimeX, const Duration(seconds: 25));
       expect(notificationCount, 1);
 
       // O attempts an invalid move (cell already occupied) at t=8s (3s later)
-      currentTime = currentTime.add(const Duration(seconds: 3));
+      time.advance(const Duration(seconds: 3));
       expect(
-        () => engine.makeMove(const Position(0, 0), timestamp: currentTime),
+        () => engine.makeMove(const Position(0, 0)),
         throwsA(isA<CellAlreadyOccupiedException>()),
       );
 
@@ -451,7 +428,7 @@ void main() {
     });
 
     test('BUG REPRO: calling pause when time has expired triggers timeout rather than pausing with zero time', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
+      final time = FakeTimeSource();
       final config = MatchConfig(
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 1,
@@ -462,14 +439,10 @@ void main() {
         ),
       );
 
-      final engine = MatchEngine(
-        config: config,
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+      final engine = MatchEngine(config: config, timeSource: time);
 
       // Time expires: 12 seconds pass (2s past limit) before pause is called
-      currentTime = currentTime.add(const Duration(seconds: 12));
+      time.advance(const Duration(seconds: 12));
       engine.pause();
 
       expect(engine.isRoundOver, true, reason: 'Expired time at pause instant must trigger round timeout');
@@ -478,7 +451,7 @@ void main() {
     });
 
     test('Zero boundary policy: invalid move arriving at exact zero remaining triggers timeout and rejects move', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
+      final time = FakeTimeSource();
       final config = MatchConfig(
         boardConfig: BoardConfig.grid3x3,
         totalRounds: 1,
@@ -489,23 +462,19 @@ void main() {
         ),
       );
 
-      final engine = MatchEngine(
-        config: config,
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+      final engine = MatchEngine(config: config, timeSource: time);
 
       // X makes a valid move at second 2
-      currentTime = currentTime.add(const Duration(seconds: 2));
-      engine.makeMove(const Position(0, 0), timestamp: currentTime);
+      time.advance(const Duration(seconds: 2));
+      engine.makeMove(const Position(0, 0));
       expect(engine.remainingTimeX, const Duration(seconds: 8));
       expect(engine.currentTurnPlayer, Player.o);
 
       // O's clock expires: exactly 10 seconds elapse for O, and O attempts an occupied cell
-      currentTime = currentTime.add(const Duration(seconds: 10));
+      time.advance(const Duration(seconds: 10));
       // Remaining for O reaches Duration.zero.
       // Must trigger timeout; invalid move is NOT accepted and no mark placed.
-      engine.makeMove(const Position(0, 0), timestamp: currentTime);
+      engine.makeMove(const Position(0, 0));
 
       expect(engine.isRoundOver, true);
       expect(engine.roundEndReason, RoundEndReason.timeout);
@@ -517,7 +486,7 @@ void main() {
 
     test('Score idempotency: moves or ticks after round conclusion NEVER increment points multiple times', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 3);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       // Round 1: X wins
       engine.makeMove(const Position(0, 0)); // X
@@ -543,7 +512,7 @@ void main() {
 
     test('Repeated finalizeMatch calls are safe no-ops and preserve final winner and scores', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 1);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       // Win round 1
       engine.makeMove(const Position(0, 0)); // X
@@ -568,7 +537,7 @@ void main() {
     });
   });
 
-  group('MatchEngine - Stale Timestamps & Clock-Jump Policy', () {
+  group('MatchEngine - Monotonic TimeSource & Timestamp Isolation', () {
     MatchConfig tenSecondClockConfig() => MatchConfig(
           boardConfig: BoardConfig.grid3x3,
           totalRounds: 1,
@@ -579,98 +548,68 @@ void main() {
           ),
         );
 
-    test('REPRO: stale move timestamp grants no refund and no cross-period double-deduction', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
-      final engine = MatchEngine(
-        config: tenSecondClockConfig(),
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
-
-      // 6s elapse during X's turn: X has 4s left, anchor at T+6s
-      currentTime = currentTime.add(const Duration(seconds: 6));
-      engine.tick();
-      expect(engine.remainingTimeX, const Duration(seconds: 4));
-
-      // X moves with a STALE timestamp (T+2s, older than the anchor T+6s)
-      engine.makeMove(
-        const Position(0, 0),
-        timestamp: currentTime.subtract(const Duration(seconds: 4)),
-      );
-
-      // MUST NOT refund: X keeps exactly 4s (pre-fix it jumped to 8s)
-      expect(engine.remainingTimeX, const Duration(seconds: 4),
-          reason: 'A stale timestamp must never increase any player balance');
-      expect(engine.currentTurnPlayer, Player.o);
-
-      // O's honest move at T+7s: only 1s deducted (period T6->T7). The
-      // already-processed period T2..T6 must not be re-counted against O.
-      currentTime = currentTime.add(const Duration(seconds: 1));
-      engine.makeMove(const Position(1, 0), timestamp: currentTime);
-      expect(engine.remainingTimeO, const Duration(seconds: 9),
-          reason: 'The period already processed under X (T2..T6) must not be re-counted against O');
-
-      // X's honest move at T+9s: 2s deducted from X (period T7->T9)
-      currentTime = currentTime.add(const Duration(seconds: 2));
-      engine.makeMove(const Position(0, 1), timestamp: currentTime);
-      expect(engine.remainingTimeX, const Duration(seconds: 2));
-
-      // Real time reaches T+12 on O's turn: only the honest 3s (T9->T12)
-      currentTime = currentTime.add(const Duration(seconds: 3));
-      engine.tick();
-      expect(engine.remainingTimeO, const Duration(seconds: 6));
-      expect(engine.isRoundOver, false,
-          reason: 'No false timeout may arise from the earlier stale sample');
-    });
-
-    test('REPRO: backward clock sample at tick does not rewind the anchor or force a false timeout', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
-      final engine = MatchEngine(
-        config: tenSecondClockConfig(),
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+    test('REPRO (ported): backward time-source sample does not rewind the anchor or force a false timeout', () {
+      final time = FakeTimeSource();
+      final engine = MatchEngine(config: tenSecondClockConfig(), timeSource: time);
 
       // T+6: honest tick, X has 4s left, anchor at T+6s
-      currentTime = currentTime.add(const Duration(seconds: 6));
+      time.advance(const Duration(seconds: 6));
       engine.tick();
       expect(engine.remainingTimeX, const Duration(seconds: 4));
 
-      // System clock jumps backward to T+2 (e.g. NTP correction): stale sample
-      currentTime = currentTime.subtract(const Duration(seconds: 4));
+      // Simulated clock rollback (reachable only through a non-monotonic test
+      // fake — production TimeSources are monotonic)
+      time.advance(const Duration(seconds: -4));
       engine.tick();
       // No deduction and the anchor must stay at T+6s
       expect(engine.remainingTimeX, const Duration(seconds: 4));
 
       // Real clock continues to T+9: only the honest 3s (T6->T9) deducted
-      currentTime = currentTime.add(const Duration(seconds: 7));
+      time.advance(const Duration(seconds: 7));
       engine.tick();
       expect(engine.remainingTimeX, const Duration(seconds: 1),
-          reason: 'Anchor must not rewind; pre-fix it re-counted T2..T9 (7s) and forced a false timeout');
+          reason: 'Anchor must not rewind; it would re-count T2..T9 (7s) and force a false timeout');
       expect(engine.isRoundOver, false);
     });
 
-    test('a move stamped at or before expiry cannot resurrect a detected timeout', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
+    test('wall-clock move timestamp is display-only and never affects remaining time', () {
+      final time = FakeTimeSource();
       final engine = MatchEngine(
         config: tenSecondClockConfig(),
-        clock: () => currentTime,
-        autoStartTimer: false,
+        timeSource: time,
+        wallClock: () => DateTime(2030, 5, 5),
       );
 
+      // Deduct exactly 5s from the monotonic source while passing an absurd
+      // stale wall stamp — it must be recorded but never influence time.
+      time.advance(const Duration(seconds: 5));
+      engine.makeMove(const Position(0, 0), timestamp: DateTime(1999, 1, 1));
+
+      expect(engine.remainingTimeX, const Duration(seconds: 5),
+          reason: 'The wall timestamp is display metadata; deduction comes from the monotonic source');
+      expect(engine.currentTurnPlayer, Player.o);
+      expect(engine.state.roundState.moveHistory.last.timestamp, DateTime(1999, 1, 1),
+          reason: 'The provided stamp is recorded for display/logging');
+    });
+
+    test('late move after an observed timeout is rejected', () {
+      final time = FakeTimeSource();
+      final engine = MatchEngine(config: tenSecondClockConfig(), timeSource: time);
+
       // X moves at T+2s (anchor T+2s)
-      engine.makeMove(const Position(0, 0), timestamp: currentTime.add(const Duration(seconds: 2)));
+      time.advance(const Duration(seconds: 2));
+      engine.makeMove(const Position(0, 0));
 
       // O's clock detected expired at T+12s
-      currentTime = currentTime.add(const Duration(seconds: 12));
+      time.advance(const Duration(seconds: 10));
       engine.tick();
       expect(engine.isRoundOver, true);
       expect(engine.roundEndReason, RoundEndReason.timeout);
       expect(engine.roundWinner, Player.x);
       expect(engine.scoreX, 1);
 
-      // A late move with a stale stamp must be rejected, not resurrect the round
-      engine.makeMove(const Position(2, 2), timestamp: currentTime.subtract(const Duration(seconds: 7)));
+      // A late move must be rejected, not resurrect the round
+      engine.makeMove(const Position(2, 2));
       expect(engine.isRoundOver, true);
       expect(engine.roundEndReason, RoundEndReason.timeout);
       expect(engine.scoreX, 1);
@@ -678,38 +617,66 @@ void main() {
           reason: 'No new move may be recorded after the detected timeout');
     });
 
-    test('invalid move with stale timestamp keeps turn and balances untouched', () {
-      var currentTime = DateTime(2026, 1, 1, 12, 0, 0);
-      final engine = MatchEngine(
-        config: tenSecondClockConfig(),
-        clock: () => currentTime,
-        autoStartTimer: false,
-      );
+    test('invalid move keeps turn and deducts only source-measured elapsed', () {
+      final time = FakeTimeSource();
+      final engine = MatchEngine(config: tenSecondClockConfig(), timeSource: time);
 
       // X moves at T+2s (anchor T+2s, X rem 8s, O's turn)
-      engine.makeMove(const Position(0, 0), timestamp: currentTime.add(const Duration(seconds: 2)));
+      time.advance(const Duration(seconds: 2));
+      engine.makeMove(const Position(0, 0));
 
-      // O attempts an occupied cell with a stale stamp (T+1s)
+      // O attempts an occupied cell after 1s, passing a stale wall stamp
+      time.advance(const Duration(seconds: 1));
       expect(
-        () => engine.makeMove(
-          const Position(0, 0),
-          timestamp: currentTime.add(const Duration(seconds: 1)),
-        ),
+        () => engine.makeMove(const Position(0, 0), timestamp: DateTime(1990, 1, 1)),
         throwsA(isA<CellAlreadyOccupiedException>()),
       );
 
-      // Turn unchanged; NO balance may increase from the stale sample
+      // Turn unchanged; only the source-measured 1s is deducted from O
       expect(engine.currentTurnPlayer, Player.o);
-      expect(engine.remainingTimeO, const Duration(seconds: 10),
-          reason: 'Pre-fix the negative elapsed refunded O to 11s');
+      expect(engine.remainingTimeO, const Duration(seconds: 9));
       expect(engine.remainingTimeX, const Duration(seconds: 8));
+      // A rejected move records nothing, not even a display stamp
+      expect(
+        engine.state.roundState.moveHistory.any((m) => m.timestamp == DateTime(1990, 1, 1)),
+        isFalse,
+      );
+    });
+
+    test('move-time deduction is measured against the monotonic anchor with no double-count', () {
+      final time = FakeTimeSource();
+      final engine = MatchEngine(config: tenSecondClockConfig(), timeSource: time);
+
+      // T+6: honest tick, X has 4s left, anchor at T+6s
+      time.advance(const Duration(seconds: 6));
+      engine.tick();
+      expect(engine.remainingTimeX, const Duration(seconds: 4));
+
+      // X's move at T+7: exactly 1s deducted, anchor at T+7
+      time.advance(const Duration(seconds: 1));
+      engine.makeMove(const Position(0, 0));
+      expect(engine.remainingTimeX, const Duration(seconds: 3));
+      expect(engine.currentTurnPlayer, Player.o);
+
+      // O's move at T+12: exactly 5s deducted
+      time.advance(const Duration(seconds: 5));
+      engine.makeMove(const Position(1, 0));
+      expect(engine.remainingTimeO, const Duration(seconds: 5));
+      expect(engine.currentTurnPlayer, Player.x);
+
+      // X's clock runs out at T+15: exactly 3s deducted from X's remaining 3s
+      time.advance(const Duration(seconds: 3));
+      engine.tick();
+      expect(engine.isRoundOver, true);
+      expect(engine.roundEndReason, RoundEndReason.timeout);
+      expect(engine.roundWinner, Player.o);
     });
   });
 
   group('MatchEngine - nextRound Invocation Safety', () {
     test('REPRO: repeated nextRound calls (manual tap racing banner auto-fire) advance exactly one round', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 3);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       // Round 1: X wins
       engine.makeMove(const Position(0, 0)); // X
@@ -739,7 +706,7 @@ void main() {
 
     test('REPRO: nextRound called mid-round is rejected (no board wipe or round skip)', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 3);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       engine.makeMove(const Position(0, 0)); // X
       engine.makeMove(const Position(1, 0)); // O — round 1 in progress
@@ -755,7 +722,7 @@ void main() {
 
     test('nextRound on the concluded final round still finalizes the match', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 1);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       engine.makeMove(const Position(0, 0)); // X
       engine.makeMove(const Position(1, 0)); // O
@@ -773,7 +740,7 @@ void main() {
   group('MatchEngine - Concluded Round State Invariants', () {
     test('no-op API calls during a concluded final round preserve the exact state object', () {
       final config = MatchConfig(boardConfig: BoardConfig.grid3x3, totalRounds: 1);
-      final engine = MatchEngine(config: config, autoStartTimer: false);
+      final engine = MatchEngine(config: config);
 
       engine.makeMove(const Position(0, 0)); // X
       engine.makeMove(const Position(1, 0)); // O

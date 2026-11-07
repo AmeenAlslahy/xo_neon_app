@@ -1,26 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../app/theme/neon_colors.dart';
 import '../../../../core/l10n/app_strings.dart';
+import '../../../../core/l10n/locale_providers.dart';
 import '../../../../core/widgets/neon_button.dart';
 import '../../../../core/widgets/neon_card.dart';
+import '../../application/match_providers.dart';
 import '../../domain/xo_engine.dart';
 import 'game_board_screen.dart';
 
 /// Screen allowing players to configure board size, match round count (1, 3, 5),
 /// and chess-clock timer settings before launching a local match.
-class GameSetupScreen extends StatefulWidget {
-  final bool isArabic;
-
-  const GameSetupScreen({
-    super.key,
-    this.isArabic = true,
-  });
+class GameSetupScreen extends ConsumerStatefulWidget {
+  const GameSetupScreen({super.key});
 
   @override
-  State<GameSetupScreen> createState() => _GameSetupScreenState();
+  ConsumerState<GameSetupScreen> createState() => _GameSetupScreenState();
 }
 
-class _GameSetupScreenState extends State<GameSetupScreen> {
+class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
   late BoardConfig _selectedConfig;
   int _selectedRounds = 3; // 1, 3 (default), 5
   TimerPreset _selectedTimerPreset = TimerPreset.none; // none (default)
@@ -34,7 +33,7 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final strings = AppStrings(isArabic: widget.isArabic);
+    final strings = ref.watch(stringsProvider);
     final presets = BoardConfig.authorizedPresets;
 
     return Scaffold(
@@ -348,12 +347,11 @@ class _GameSetupScreenState extends State<GameSetupScreen> {
                       timerConfig: timerConfig,
                     );
 
+                    // Publish the configuration for the board screen, then navigate.
+                    ref.read(pendingMatchConfigProvider.notifier).select(matchConfig);
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => GameBoardScreen(
-                          matchConfig: matchConfig,
-                          isArabic: widget.isArabic,
-                        ),
+                        builder: (_) => const GameBoardScreen(),
                       ),
                     );
                   },

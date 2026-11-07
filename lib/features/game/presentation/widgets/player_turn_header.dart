@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/neon_colors.dart';
 import '../../../../core/l10n/app_strings.dart';
+import '../../../../core/l10n/locale_providers.dart';
 import '../../domain/xo_engine.dart';
 import 'neon_o_widget.dart';
 import 'neon_x_widget.dart';
 
 /// Top bar displaying players, active turn / terminal outcome indicator, scores,
 /// multi-round progression, chess clocks, and board win rule.
-class PlayerTurnHeader extends StatelessWidget {
+class PlayerTurnHeader extends ConsumerWidget {
   final Player currentPlayer;
   final BoardConfig config;
   final int scoreX;
   final int scoreO;
-  final AppStrings strings;
   final GameStatus? status;
   final int currentRound;
   final int totalRounds;
@@ -27,7 +28,6 @@ class PlayerTurnHeader extends StatelessWidget {
     required this.config,
     this.scoreX = 0,
     this.scoreO = 0,
-    this.strings = const AppStrings(),
     this.status,
     this.currentRound = 1,
     this.totalRounds = 1,
@@ -38,7 +38,8 @@ class PlayerTurnHeader extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final strings = ref.watch(stringsProvider);
     final isGameOver = status?.isTerminal ?? false;
     final isWon = status is GameWon;
     final isTimeout = status is GameTimeout;
@@ -85,6 +86,7 @@ class PlayerTurnHeader extends StatelessWidget {
               color: NeonColors.cyanX,
               timeRemaining: remainingTimeX,
               isTimerEnabled: isTimerEnabled,
+              strings: strings,
             ),
           ),
           const SizedBox(width: 6),
@@ -284,6 +286,7 @@ class PlayerTurnHeader extends StatelessWidget {
               color: NeonColors.orangeO,
               timeRemaining: remainingTimeO,
               isTimerEnabled: isTimerEnabled,
+              strings: strings,
             ),
           ),
         ],
@@ -300,6 +303,7 @@ class PlayerTurnHeader extends StatelessWidget {
     required Color color,
     Duration? timeRemaining,
     bool isTimerEnabled = false,
+    required AppStrings strings,
   }) {
     final isLowTime = isTimerEnabled &&
         timeRemaining != null &&

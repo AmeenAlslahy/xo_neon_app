@@ -1,33 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../app/theme/neon_colors.dart';
-import '../../../../core/l10n/app_strings.dart';
+import '../../../../core/l10n/locale_providers.dart';
 import '../../../../core/widgets/neon_card.dart';
 import '../widgets/neon_o_widget.dart';
 import '../widgets/neon_x_widget.dart';
 import 'game_setup_screen.dart';
 
-/// The main landing screen featuring glowing cyber-neon branding and mode cards.
-class HomeScreen extends StatefulWidget {
-  final VoidCallback? onToggleLanguage;
-  final bool isArabic;
-
-  const HomeScreen({
-    super.key,
-    this.onToggleLanguage,
-    this.isArabic = true,
-  });
+/// The main landing screen featuring glowing cyber-neon branding and mode
+/// cards. Reads strings/locale directly from Riverpod (no prop drilling).
+class HomeScreen extends ConsumerStatefulWidget {
+  const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _soundEnabled = true;
   bool _reduceMotionPreview = false;
 
   @override
   Widget build(BuildContext context) {
-    final strings = AppStrings(isArabic: widget.isArabic);
+    final strings = ref.watch(stringsProvider);
 
     return Scaffold(
       backgroundColor: NeonColors.background,
@@ -89,7 +85,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       // Language Switcher
                       TextButton(
-                        onPressed: widget.onToggleLanguage,
+                        onPressed: () => ref.read(localeProvider.notifier).toggle(),
                         child: Text(
                           strings.languageToggle,
                           style: const TextStyle(
@@ -148,7 +144,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => GameSetupScreen(isArabic: widget.isArabic),
+                      builder: (_) => const GameSetupScreen(),
                     ),
                   );
                 },
@@ -275,8 +271,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-    ),
-  );
+      ),
+    );
+  }
 }
-}
-

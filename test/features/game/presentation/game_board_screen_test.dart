@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xo_neon_app/app/theme/neon_theme.dart';
+import 'package:xo_neon_app/core/l10n/locale_providers.dart';
+import 'package:xo_neon_app/features/game/application/match_providers.dart';
 import 'package:xo_neon_app/features/game/domain/xo_engine.dart';
 import 'package:xo_neon_app/features/game/presentation/screens/game_board_screen.dart';
 import 'package:xo_neon_app/features/game/presentation/widgets/game_grid_widget.dart';
@@ -12,6 +15,15 @@ import 'package:xo_neon_app/features/game/presentation/widgets/player_turn_heade
 import 'package:xo_neon_app/features/game/presentation/widgets/round_end_banner.dart';
 
 void main() {
+  /// Single-round configuration: its only round is the final one, so a win
+  /// concludes the match and presents the final dialog. Tests that rely on
+  /// this behavior declare it explicitly — the provider default is now the
+  /// approved 3-round / timer-off configuration.
+  const singleRoundConfig = MatchConfig(
+    boardConfig: BoardConfig.grid3x3,
+    totalRounds: 1,
+  );
+
   Widget buildTestableWidget({
     MatchConfig? matchConfig,
     BoardConfig? config,
@@ -19,25 +31,31 @@ void main() {
     TextScaler textScaler = TextScaler.noScaling,
     bool disableAnimations = false,
   }) {
-    return MaterialApp(
-      theme: NeonTheme.darkTheme,
-      locale: Locale(isArabic ? 'ar' : 'en'),
-      supportedLocales: const [Locale('ar'), Locale('en')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      home: MediaQuery(
-        data: MediaQueryData(
-          size: const Size(390, 844),
-          textScaler: textScaler,
-          disableAnimations: disableAnimations,
+    return ProviderScope(
+      overrides: [
+        matchConfigProvider.overrideWithValue(
+          matchConfig ??
+              MatchConfig(boardConfig: config ?? BoardConfig.grid3x3),
         ),
-        child: GameBoardScreen(
-          matchConfig: matchConfig,
-          config: config ?? BoardConfig.grid3x3,
-          isArabic: isArabic,
+        timeSourceProvider.overrideWithValue(FakeTimeSource()),
+        localeInitialProvider.overrideWithValue(isArabic),
+      ],
+      child: MaterialApp(
+        theme: NeonTheme.darkTheme,
+        locale: Locale(isArabic ? 'ar' : 'en'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: MediaQuery(
+          data: MediaQueryData(
+            size: const Size(390, 844),
+            textScaler: textScaler,
+            disableAnimations: disableAnimations,
+          ),
+          child: const GameBoardScreen(),
         ),
       ),
     );
@@ -63,6 +81,25 @@ void main() {
       await tester.pumpAndSettle();
     } else {
       await tester.pump();
+    }
+  }
+
+  /// Wins one round of a 3-round match for X. When [xStarts] is false, O
+  /// opens the round and X still wins (mirrors the engine test sequences).
+  Future<void> winRoundForX(WidgetTester tester, {required bool xStarts}) async {
+    if (xStarts) {
+      await tapCell(tester, 0, 0); // X
+      await tapCell(tester, 1, 0); // O
+      await tapCell(tester, 0, 1); // X
+      await tapCell(tester, 1, 1); // O
+      await tapCell(tester, 0, 2); // X wins
+    } else {
+      await tapCell(tester, 1, 0); // O
+      await tapCell(tester, 0, 0); // X
+      await tapCell(tester, 1, 1); // O
+      await tapCell(tester, 0, 1); // X
+      await tapCell(tester, 2, 0); // O
+      await tapCell(tester, 0, 2); // X wins
     }
   }
 
@@ -117,7 +154,7 @@ void main() {
     });
 
     testWidgets('real match ending in Victory: draws winning line, increments score once, shows dialog', (tester) async {
-      await tester.pumpWidget(buildTestableWidget());
+      await tester.pumpWidget(buildTestableWidget(matchConfig: singleRoundConfig));
       await tester.pumpAndSettle();
 
       // Initial scores: 0 - 0
@@ -181,7 +218,7 @@ void main() {
     });
 
     testWidgets('real match ending in Draw: announces draw, awards NO points', (tester) async {
-      await tester.pumpWidget(buildTestableWidget());
+      await tester.pumpWidget(buildTestableWidget(matchConfig: singleRoundConfig));
       await tester.pumpAndSettle();
 
       // Play a known draw sequence:
@@ -212,7 +249,7 @@ void main() {
     });
 
     testWidgets('moving after game over is blocked', (tester) async {
-      await tester.pumpWidget(buildTestableWidget());
+      await tester.pumpWidget(buildTestableWidget(matchConfig: singleRoundConfig));
       await tester.pumpAndSettle();
 
       // X wins on row 0:
@@ -486,7 +523,10 @@ void main() {
     });
 
     testWidgets('runs smoothly with reduced motion enabled (immediate dialog without forced wait)', (tester) async {
-      await tester.pumpWidget(buildTestableWidget(disableAnimations: true));
+      await tester.pumpWidget(buildTestableWidget(
+        matchConfig: singleRoundConfig,
+        disableAnimations: true,
+      ));
       await tester.pumpAndSettle();
 
       // Play a quick win
@@ -506,25 +546,6 @@ void main() {
   });
 
   group('GameBoardScreen - Final Round Delayed Finalize & Transition Safety', () {
-    /// Wins one round of a 3-round match for X. When [xStarts] is false, O
-    /// opens the round and X still wins (mirrors the engine test sequences).
-    Future<void> winRoundForX(WidgetTester tester, {required bool xStarts}) async {
-      if (xStarts) {
-        await tapCell(tester, 0, 0); // X
-        await tapCell(tester, 1, 0); // O
-        await tapCell(tester, 0, 1); // X
-        await tapCell(tester, 1, 1); // O
-        await tapCell(tester, 0, 2); // X wins
-      } else {
-        await tapCell(tester, 1, 0); // O
-        await tapCell(tester, 0, 0); // X
-        await tapCell(tester, 1, 1); // O
-        await tapCell(tester, 0, 1); // X
-        await tapCell(tester, 2, 0); // O
-        await tapCell(tester, 0, 2); // X wins
-      }
-    }
-
     /// Drives a 3-round match to the point where the FINAL round has just been
     /// won and the 1200ms finalize delay is pending (no banner on final round).
     Future<void> reachFinalRoundEnd(WidgetTester tester) async {
@@ -610,7 +631,7 @@ void main() {
 
     testWidgets('exiting the screen inside the finalize delay window must not surface the dialog afterwards', (tester) async {
       // Single-round match: its only round is the final one.
-      await tester.pumpWidget(buildTestableWidget());
+      await tester.pumpWidget(buildTestableWidget(matchConfig: singleRoundConfig));
       await tester.pumpAndSettle();
 
       await winRoundForX(tester, xStarts: true);
@@ -721,5 +742,110 @@ void main() {
       expect(find.byType(GameOverDialog), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+  });
+
+  group('GameBoardScreen - Background Policy', () {
+    testWidgets('REPRO: backgrounding freezes the transition countdown; resume is manual and completes the remaining time', (tester) async {
+      final matchConfig = MatchConfig(
+        boardConfig: BoardConfig.grid3x3,
+        totalRounds: 3,
+      );
+      await tester.pumpWidget(buildTestableWidget(matchConfig: matchConfig));
+      await tester.pumpAndSettle();
+
+      await winRoundForX(tester, xStarts: true);
+      await tester.pumpAndSettle();
+      expect(find.byType(RoundEndBanner), findsOneWidget);
+      expect(find.descendant(
+        of: find.byType(RoundEndBanner),
+        matching: find.text('فاز X!'),
+      ), findsOneWidget);
+      expect(find.text('الجولة التالية خلال ٣ ثوانٍ...'), findsOneWidget);
+
+      // App enters the background: the screen's lifecycle observer freezes
+      // the chess clock AND the transition countdown.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+
+      // Long background time: countdown frozen, round result stays visible.
+      await tester.pump(const Duration(seconds: 30));
+      expect(find.text('الجولة التالية خلال ٣ ثوانٍ...'), findsOneWidget,
+          reason: 'Frozen countdown ignores background time');
+      expect(find.descendant(
+        of: find.byType(RoundEndBanner),
+        matching: find.text('فاز X!'),
+      ), findsOneWidget, reason: 'Round result stays visible while waiting');
+      expect(find.byType(GameOverDialog), findsNothing);
+      expect(find.text('الجولة ٢ من ٣'), findsNothing,
+          reason: 'No auto-transition in the background');
+
+      // Returning to the foreground must NOT auto-resume.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 3));
+      expect(find.text('الجولة التالية خلال ٣ ثوانٍ...'), findsOneWidget,
+          reason: 'Return alone must not resume the countdown');
+      expect(find.text('الجولة ٢ من ٣'), findsNothing);
+
+      // Manual resume via the AppBar button (visible while frozen) —
+      // completes the REMAINING seconds, not a fresh countdown.
+      await tester.tap(find.byIcon(Icons.play_arrow_rounded), warnIfMissed: false);
+      await tester.pump();
+      expect(find.text('الجولة التالية خلال ٣ ثوانٍ...'), findsOneWidget);
+
+      // Remaining time completes: 3 → 2 → 1 → exactly one transition.
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('الجولة التالية خلال ٢ ثوانٍ...'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('الجولة التالية خلال ١ ثوانٍ...'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.text('الجولة ٢ من ٣'), findsOneWidget);
+      expect(find.byType(RoundEndBanner), findsNothing);
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      // No duplicate transition afterwards.
+      // No duplicate transition afterwards.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(find.text('الجولة ٢ من ٣'), findsOneWidget);
+      expect(find.byType(RoundEndBanner), findsNothing);
+      expect(find.byType(GameOverDialog), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('REPRO: a result delayed in the background appears immediately on return, without resume', (tester) async {
+      await tester.pumpWidget(buildTestableWidget(matchConfig: singleRoundConfig));
+      await tester.pumpAndSettle();
+
+      // Win the single (final) round: the 1200ms presentation delay starts.
+      await winRoundForX(tester, xStarts: true);
+      await tester.pumpAndSettle();
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      // Background BEFORE the delay completes.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump(const Duration(seconds: 30));
+      expect(find.byType(GameOverDialog), findsNothing,
+          reason: 'No dialog may appear while the app is in the background');
+
+      // Return: the result appears IMMEDIATELY, without manual resume.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.byType(GameOverDialog), findsOneWidget,
+          reason: 'The frozen result is presented on return');
+      expect(find.text('النتيجة النهائية للمباراة'), findsOneWidget);
+
+      // Exactly one dialog, no duplicates.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(find.byType(GameOverDialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // NOTE: "reset while the result presentation is frozen" has no reachable
+    // UI path: while backgrounded, no input is possible, and on return the
+    // result presents immediately. The cancel-on-reset path is covered by the
+    // MatchController - Final Result Policy container tests.
   });
 }

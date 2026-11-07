@@ -2,17 +2,21 @@ import 'cell_position.dart';
 import 'player.dart';
 
 /// Represents an immutable recorded move made by a player on the board.
+///
+/// [timestamp] is display/log metadata only (wall-clock sample at recording
+/// time, when available). It is deliberately excluded from all game timing:
+/// chess-clock accounting flows exclusively through the monotonic TimeSource.
 class Move {
   final Player player;
   final Position position;
   final int moveNumber;
-  final DateTime timestamp;
+  final DateTime? timestamp;
 
   Move({
     required this.player,
     required this.position,
     required this.moveNumber,
-    required this.timestamp,
+    this.timestamp,
   });
 
   @override
@@ -30,5 +34,5 @@ class Move {
 
   @override
   String toString() =>
-      'Move(#$moveNumber by ${player.symbol} at $position, time: ${timestamp.toIso8601String()})';
+      'Move(#$moveNumber by ${player.symbol} at $position, time: ${timestamp?.toIso8601String() ?? 'n/a'})';
 }

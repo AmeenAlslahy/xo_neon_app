@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/neon_colors.dart';
-import '../../../../core/l10n/app_strings.dart';
+import '../../../../core/l10n/locale_providers.dart';
 import '../../../../core/widgets/neon_button.dart';
 import '../../domain/xo_engine.dart';
 import 'neon_o_widget.dart';
@@ -8,12 +9,11 @@ import 'neon_x_widget.dart';
 
 /// Modal dialog presented when a round or an entire match concludes,
 /// supporting both intermediate round results and overall match victory/draw summaries.
-class GameOverDialog extends StatelessWidget {
+class GameOverDialog extends ConsumerWidget {
   final GameStatus status;
   final VoidCallback onRematch;
   final VoidCallback onExit;
   final VoidCallback? onViewBoard;
-  final AppStrings strings;
   final bool isFinalMatchResult;
   final int scoreX;
   final int scoreO;
@@ -25,7 +25,6 @@ class GameOverDialog extends StatelessWidget {
     required this.onRematch,
     required this.onExit,
     this.onViewBoard,
-    this.strings = const AppStrings(),
     this.isFinalMatchResult = false,
     this.scoreX = 0,
     this.scoreO = 0,
@@ -33,7 +32,8 @@ class GameOverDialog extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final strings = ref.watch(stringsProvider);
     final isWon = isFinalMatchResult
         ? matchWinner != null
         : (status is GameWon || status is GameTimeout);

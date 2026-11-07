@@ -13,16 +13,17 @@ import 'win_evaluator.dart';
 ///
 /// Can be used as a stateful coordinator ([GameEngine] instance) or as a pure
 /// functional transition pipeline via [GameEngine.applyMove].
+///
+/// Timing-free by design: this class never reads clocks. [Move.timestamp] is
+/// optional display/log metadata supplied by the caller.
 class GameEngine {
   final WinEvaluator evaluator;
-  final DateTime Function() clock;
   GameState _state;
 
   GameEngine({
     required BoardConfig config,
     Player startingPlayer = Player.x,
     this.evaluator = const WinEvaluator(),
-    this.clock = DateTime.now,
   }) : _state = GameState.initial(
           config: config,
           startingPlayer: startingPlayer,
@@ -49,6 +50,9 @@ class GameEngine {
   /// Pure functional state transition.
   /// Given an immutable [currentState] and a target [position], validates and returns a new [GameState].
   ///
+  /// [timestamp] is optional display/log metadata recorded on the [Move]; it
+  /// never participates in rules or timing.
+  ///
   /// Throws:
   /// - [GameOverException] if [currentState.isGameOver].
   /// - [WrongTurnException] if [player] is passed and does not match [currentState.currentPlayer].
@@ -58,7 +62,7 @@ class GameEngine {
     required GameState currentState,
     required Position position,
     Player? player,
-    required DateTime timestamp,
+    DateTime? timestamp,
     WinEvaluator evaluator = const WinEvaluator(),
   }) {
     // 1. Guard against moves after game conclusion
@@ -140,13 +144,13 @@ class GameEngine {
   }
 
   /// Stateful move execution delegating to [applyMove].
-  /// Uses [timestamp] if provided, otherwise samples [clock].
+  /// [timestamp] is optional display/log metadata recorded on the [Move].
   GameState makeMove(Position position, {Player? player, DateTime? timestamp}) {
     _state = applyMove(
       currentState: _state,
       position: position,
       player: player,
-      timestamp: timestamp ?? clock(),
+      timestamp: timestamp,
       evaluator: evaluator,
     );
     return _state;

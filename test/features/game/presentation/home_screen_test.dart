@@ -1,24 +1,30 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xo_neon_app/app/theme/neon_theme.dart';
+import 'package:xo_neon_app/core/l10n/locale_providers.dart';
 import 'package:xo_neon_app/features/game/presentation/screens/game_setup_screen.dart';
 import 'package:xo_neon_app/features/game/presentation/screens/home_screen.dart';
 
 void main() {
-  Widget buildTestableWidget({bool isArabic = true, VoidCallback? onToggle}) {
-    return MaterialApp(
-      theme: NeonTheme.darkTheme,
-      locale: Locale(isArabic ? 'ar' : 'en'),
-      supportedLocales: const [Locale('ar'), Locale('en')],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
+  Widget buildTestableWidget({bool isArabic = true}) {
+    return ProviderScope(
+      overrides: [
+        // Pin the locale only when a non-default language is requested; the
+        // language-toggle test uses the real LocaleController.
+        if (!isArabic) localeInitialProvider.overrideWithValue(false),
       ],
-      home: HomeScreen(
-        isArabic: isArabic,
-        onToggleLanguage: onToggle,
+      child: MaterialApp(
+        theme: NeonTheme.darkTheme,
+        locale: Locale(isArabic ? 'ar' : 'en'),
+        supportedLocales: const [Locale('ar'), Locale('en')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: const HomeScreen(),
       ),
     );
   }
@@ -55,24 +61,13 @@ void main() {
     });
 
     testWidgets('toggling language switches between Arabic and English text', (tester) async {
-      var isArabic = true;
-
-      await tester.pumpWidget(
-        StatefulBuilder(
-          builder: (context, setState) {
-            return buildTestableWidget(
-              isArabic: isArabic,
-              onToggle: () => setState(() => isArabic = !isArabic),
-            );
-          },
-        ),
-      );
+      await tester.pumpWidget(buildTestableWidget());
       await tester.pumpAndSettle();
 
       // Initially Arabic
       expect(find.text('لعب محلي'), findsOneWidget);
 
-      // Tap language switch button
+      // Tap language switch button — driven by localeProvider via LocaleController
       await tester.tap(find.text('English'));
       await tester.pumpAndSettle();
 
@@ -83,4 +78,3 @@ void main() {
     });
   });
 }
-

@@ -1,156 +1,336 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../../app/theme/neon_colors.dart';
-import '../../../../core/l10n/app_strings.dart';
+import '../../../../core/l10n/locale_providers.dart';
 import '../../../../core/widgets/neon_button.dart';
+import '../../application/match_controller.dart';
+import '../../application/match_providers.dart';
 import '../../domain/xo_engine.dart';
 import '../widgets/game_grid_widget.dart';
 import '../widgets/game_over_dialog.dart';
 import '../widgets/player_turn_header.dart';
 import '../widgets/round_end_banner.dart';
 
-/// Screen hosting a cyber-neon local match, driven authoritatively by [MatchEngine].
-///
-/// Agreed priorities recorded for the next architectural batch (NOT to be
-/// started here): (1) inject a monotonic TimeSource (Stopwatch-based) into
-/// MatchEngine, replacing wall-clock samples; (2) move the round/match
-/// transition pacing (this screen's finalize delay and RoundEndBanner's
-/// countdown) into the application layer so scheduling is deterministic and
-/// engine-owned.
-class GameBoardScreen extends StatefulWidget {
-  final MatchConfig matchConfig;
-  final bool isArabic;
-
-  GameBoardScreen({
-    super.key,
-    MatchConfig? matchConfig,
-    BoardConfig? config,
-    this.isArabic = true,
-  }) : matchConfig = matchConfig ??
-            MatchConfig(
-              boardConfig: config ?? BoardConfig.grid3x3,
-              totalRounds: 1,
-            );
+/// Passive screen hosting a cyber-neon local match. All match timing and
+/// transition pacing lives in [MatchController] (application layer); this
+/// widget watches [matchControllerProvider], renders state, and forwards
+/// user intent. Locale/strings come from Riverpod — no prop drilling.
+class GameBoardScreen extends ConsumerWidget {
+  const GameBoardScreen({super.key});
 
   @override
-  State<GameBoardScreen> createState() => _GameBoardScreenState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ui = ref.watch(matchControllerProvider);
+    final strings = ref.watch(stringsProvider);
+    final matchState = ui.match;
+    final roundState = matchState.roundState;
+    final boardConfig = ref.watch(matchConfigProvider).boardConfig;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
 
-class _GameBoardScreenState extends State<GameBoardScreen> with WidgetsBindingObserver {
-  late MatchEngine _engine;
-  bool _dialogPresentedForFinalMatch = false;
+    // Pacing-only accessibility setting; a plain field, no rebuild needed.
+    ref.read(matchControllerProvider.notifier).reduceMotion = reduceMotion;
 
-  /// The single live finalize-scheduling operation. Canceled whenever the
-  /// round it was scheduled for stops being the concluded final round, so a
-  /// stale scheduling can never present a newer round's result early.
-  Timer? _finalizeDelayTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _initEngine();
-  }
-
-  void _initEngine([MatchConfig? newConfig]) {
-    _engine = MatchEngine(
-      config: newConfig ?? widget.matchConfig,
-      startingPlayer: Player.x,
-    );
-    _engine.addListener(_onMatchStateChanged);
-    _dialogPresentedForFinalMatch = false;
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _finalizeDelayTimer?.cancel();
-    _engine.removeListener(_onMatchStateChanged);
-    _engine.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      if (_engine.phase == MatchPhase.inProgress) {
-        _engine.pause();
+    // Present the final result dialog exactly once per concluded match.
+    ref.listen<MatchUiState>(matchControllerProvider, (previous, next) {
+      final justConcluded =
+          next.match.isMatchOver && !(previous?.match.isMatchOver ?? false);
+      if (justConcluded) {
+        _presentFinalMatchDialog(context, ref);
       }
-    }
+    });
+
+        final isNonFinalRoundEnded = matchState.isRoundOver && !matchState.isFinalRound;
+        final isMatchConcluded = matchState.isMatchOver;
+        final isPaused = matchState.isPaused;
+        final schedulingPaused = ui.isSchedulingPaused;
+        // Background-freeze of the transition countdown exposes the same
+        // manual resume affordance as an engine pause (no auto-resume).
+        final effectivelyPaused = isPaused || schedulingPaused;
+        final controller = ref.read(matchControllerProvider.notifier);
+
+    return _AppLifecycleObserver(
+      child: PopScope(
+        canPop: isMatchConcluded || roundState.moveHistory.isEmpty,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop) return;
+          final canLeave = await _confirmExitActiveMatch(context, ref);
+          if (!context.mounted) return;
+          if (canLeave) {
+            Navigator.of(context).pop();
+          }
+        },
+        child: Scaffold(
+          backgroundColor: NeonColors.background,
+          appBar: AppBar(
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: NeonColors.textSecondary),
+              tooltip: strings.exitToHome,
+              onPressed: () => _onExitPressed(context, ref),
+            ),
+            title: Text(strings.presetTitle(boardConfig)),
+              actions: [
+                if (!matchState.isRoundOver || schedulingPaused)
+                  IconButton(
+                    tooltip: effectivelyPaused ? strings.resumeGame : strings.pauseGame,
+                    icon: Icon(
+                      effectivelyPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                      color: NeonColors.amberGold,
+                    ),
+                    onPressed: () {
+                      if (effectivelyPaused) {
+                        controller.resume();
+                      } else {
+                        controller.pause();
+                      }
+                    },
+                  ),
+              IconButton(
+                tooltip: strings.resetGame,
+                icon: const Icon(Icons.refresh_rounded, color: NeonColors.cyanX),
+                onPressed: () => _onReplayRoundPressed(context, ref),
+              ),
+            ],
+          ),
+          body: Container(
+            decoration: NeonColors.cyberBackground,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Column(
+                  children: [
+                    // Player Turn HUD with Scores, Rounds, Chess Clocks, and Status
+                    PlayerTurnHeader(
+                      currentPlayer: roundState.currentPlayer,
+                      config: boardConfig,
+                      scoreX: matchState.scoreX,
+                      scoreO: matchState.scoreO,
+                      currentRound: matchState.currentRound,
+                      totalRounds: matchState.config.totalRounds,
+                      remainingTimeX: matchState.remainingTimeX,
+                      remainingTimeO: matchState.remainingTimeO,
+                      isTimerEnabled: matchState.isTimerEnabled,
+                      isPaused: isPaused,
+                      status: roundState.status,
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Pause Overlay Banner if Match is Paused
+                    if (isPaused)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF160E36),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: NeonColors.amberGold, width: 1.5),
+                          boxShadow: NeonColors.glow(color: NeonColors.amberGold, blur: 10),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.pause_circle_filled_rounded, color: NeonColors.amberGold, size: 22),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                strings.matchPausedDesc,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton(
+                              style: TextButton.styleFrom(
+                                backgroundColor: NeonColors.amberGold.withValues(alpha: 0.2),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  side: const BorderSide(color: NeonColors.amberGold),
+                                ),
+                              ),
+                              onPressed: () => controller.resume(),
+                              child: Text(
+                                strings.resumeGame,
+                                style: const TextStyle(
+                                  color: NeonColors.amberGold,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                    // Single unified cyber-neon game board
+                    Expanded(
+                      child: Center(
+                        child: GameGridWidget(
+                          config: boardConfig,
+                          board: roundState.board,
+                          winningLine: roundState.winningLine,
+                          allWinningLines: roundState.status is GameWon
+                              ? (roundState.status as GameWon).allWinningLines
+                              : null,
+                          winner: roundState.winner,
+                          currentPlayer: roundState.currentPlayer,
+                          onCellTap: (position) => _handleCellTap(ref, position),
+                        ),
+                      ),
+                    ),
+
+                    // Non-obscuring Round End Transition Banner
+                    if (isNonFinalRoundEnded)
+                      RoundEndBanner(
+                        matchState: matchState,
+                        transitionSecondsRemaining: ui.roundTransitionSecondsRemaining,
+                        onNextRound: controller.nextRound,
+                      ),
+
+                    const SizedBox(height: 10),
+
+                    // Responsive Bottom Control Bar (No text clipping)
+                    if (isMatchConcluded)
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: NeonButton(
+                              label: strings.playAgain,
+                              icon: Icons.replay_rounded,
+                              isSolid: true,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                              onPressed: () => _restartMatch(ref),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 4,
+                            child: NeonButton(
+                              label: strings.viewResult,
+                              icon: Icons.emoji_events_outlined,
+                              isSecondary: true,
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                              onPressed: () => _presentFinalMatchDialog(context, ref),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 3,
+                            child: NeonButton(
+                              label: strings.exitToHome,
+                              icon: Icons.home_outlined,
+                              isSecondary: true,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
+                              onPressed: () => _onExitPressed(context, ref),
+                            ),
+                          ),
+                        ],
+                      )
+                    else if (isNonFinalRoundEnded)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: NeonButton(
+                              label: strings.nextRoundNow,
+                              icon: Icons.skip_next_rounded,
+                              isSolid: true,
+                              color: NeonColors.purpleNeon,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              onPressed: controller.nextRound,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: NeonButton(
+                              label: strings.exitToHome,
+                              icon: Icons.home_outlined,
+                              isSecondary: true,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                              onPressed: () => _onExitPressed(context, ref),
+                            ),
+                          ),
+                        ],
+                      )
+                    else
+                      Row(
+                        children: [
+                            Expanded(
+                              child: NeonButton(
+                                label: effectivelyPaused ? strings.resumeGame : strings.pauseGame,
+                                icon: effectivelyPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                                isSecondary: true,
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                onPressed: () {
+                                  if (effectivelyPaused) {
+                                    controller.resume();
+                                  } else {
+                                    controller.pause();
+                                  }
+                                },
+                              ),
+                            ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: NeonButton(
+                              label: strings.resetGame,
+                              icon: Icons.refresh,
+                              isSecondary: true,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                              onPressed: () => _onReplayRoundPressed(context, ref),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: NeonButton(
+                              label: strings.exitToHome,
+                              icon: Icons.home_outlined,
+                              isSecondary: true,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                              onPressed: () => _onExitPressed(context, ref),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
-  void _onMatchStateChanged(MatchState state) {
-    if (!mounted) return;
-    setState(() {});
-
-    // The round that a pending finalize delay was scheduled for no longer
-    // exists: a round reset or match restart moved the phase back to an
-    // active round. Cancel the stale scheduling operation.
-    if (state.phase == MatchPhase.inProgress) {
-      _finalizeDelayTimer?.cancel();
-      _finalizeDelayTimer = null;
-    }
-
-    // When the final round completes, display the final match outcome dialog
-    if (state.isMatchOver && !_dialogPresentedForFinalMatch) {
-      _dialogPresentedForFinalMatch = true;
-      _finalizeDelayTimer?.cancel();
-      _finalizeDelayTimer = null;
-      _presentFinalMatchDialog();
-    } else if (state.isRoundOver && state.isFinalRound && !_dialogPresentedForFinalMatch) {
-      // Allow players to view the board first, then finalize match and show
-      // dialog. Only one live finalize delay at a time: a newer round
-      // conclusion supersedes any older scheduling.
-      _finalizeDelayTimer?.cancel();
-      final reduceMotion = MediaQuery.of(context).disableAnimations;
-      final delay = reduceMotion ? const Duration(milliseconds: 400) : const Duration(milliseconds: 1200);
-
-      _finalizeDelayTimer = Timer(delay, () {
-        _finalizeDelayTimer = null;
-        if (!mounted) return;
-        if (_dialogPresentedForFinalMatch) return;
-        // Defense-in-depth result guard: finalize only if the engine still
-        // holds a concluded final round (match/round/phase checks).
-        if (_engine.phase != MatchPhase.roundEnded ||
-            !_engine.isFinalRound ||
-            _engine.isMatchOver) {
-          return;
-        }
-        _dialogPresentedForFinalMatch = true;
-        _engine.finalizeMatch();
-        _presentFinalMatchDialog();
-      });
-    }
-  }
-
-  /// Handles tapping a grid cell, routing to authoritative [MatchEngine].
-  void _handleCellTap(Position position) {
-    if (_engine.isRoundOver || _engine.isPaused) return;
-    if (!_engine.state.roundState.board.isEmpty(position)) return;
+  /// Handles tapping a grid cell, routing to the controller's engine.
+  void _handleCellTap(WidgetRef ref, Position position) {
+    final controller = ref.read(matchControllerProvider.notifier);
+    if (controller.isRoundOver || controller.isPaused) return;
+    if (!controller.snapshot.match.roundState.board.isEmpty(position)) return;
 
     try {
-      _engine.makeMove(position);
+      controller.makeMove(position);
     } on GameException {
       return;
     }
   }
 
   /// Presents the final match summary dialog.
-  void _presentFinalMatchDialog() {
-    final strings = AppStrings(isArabic: widget.isArabic);
+  void _presentFinalMatchDialog(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(matchControllerProvider.notifier);
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (_) => GameOverDialog(
-        status: _engine.state.roundState.status,
+        status: controller.snapshot.match.roundState.status,
         isFinalMatchResult: true,
-        scoreX: _engine.scoreX,
-        scoreO: _engine.scoreO,
-        matchWinner: _engine.matchWinner,
-        strings: strings,
+        scoreX: controller.scoreX,
+        scoreO: controller.scoreO,
+        matchWinner: controller.matchWinner,
         onRematch: () {
           Navigator.of(context).pop();
-          _restartMatch();
+          _restartMatch(ref);
         },
         onViewBoard: () {
           Navigator.of(context).pop();
@@ -164,27 +344,18 @@ class _GameBoardScreenState extends State<GameBoardScreen> with WidgetsBindingOb
   }
 
   /// Restarts the match with zeroed scores and round 1.
-  void _restartMatch() {
-    setState(() {
-      _dialogPresentedForFinalMatch = false;
-      _engine.restartMatch();
-    });
-  }
-
-  /// Advances to the next round in a multi-round match.
-  void _advanceNextRound() {
-    setState(() {
-      _engine.nextRound();
-    });
+  void _restartMatch(WidgetRef ref) {
+    ref.read(matchControllerProvider.notifier).startMatch();
   }
 
   /// Confirms replay of the active round if moves have been made.
-  Future<bool> _confirmReplayActiveRound() async {
-    if (_engine.isRoundOver || _engine.state.roundState.moveHistory.isEmpty) {
+  Future<bool> _confirmReplayActiveRound(BuildContext context, WidgetRef ref) async {
+    final controller = ref.read(matchControllerProvider.notifier);
+    if (controller.isRoundOver || controller.snapshot.match.roundState.moveHistory.isEmpty) {
       return true;
     }
 
-    final strings = AppStrings(isArabic: widget.isArabic);
+    final strings = ref.read(stringsProvider);
     final shouldRestart = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -245,21 +416,22 @@ class _GameBoardScreenState extends State<GameBoardScreen> with WidgetsBindingOb
     return shouldRestart ?? false;
   }
 
-  void _onReplayRoundPressed() async {
-    final canRestart = await _confirmReplayActiveRound();
-    if (!mounted) return;
+  void _onReplayRoundPressed(BuildContext context, WidgetRef ref) async {
+    final canRestart = await _confirmReplayActiveRound(context, ref);
+    if (!context.mounted) return;
     if (canRestart) {
-      _engine.resetCurrentRound();
+      ref.read(matchControllerProvider.notifier).resetCurrentRound();
     }
   }
 
   /// Confirms exit if match is active.
-  Future<bool> _confirmExitActiveMatch() async {
-    if (_engine.isMatchOver || _engine.state.roundState.moveHistory.isEmpty) {
+  Future<bool> _confirmExitActiveMatch(BuildContext context, WidgetRef ref) async {
+    final controller = ref.read(matchControllerProvider.notifier);
+    if (controller.isMatchOver || controller.snapshot.match.roundState.moveHistory.isEmpty) {
       return true;
     }
 
-    final strings = AppStrings(isArabic: widget.isArabic);
+    final strings = ref.read(stringsProvider);
     final shouldLeave = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -320,277 +492,59 @@ class _GameBoardScreenState extends State<GameBoardScreen> with WidgetsBindingOb
     return shouldLeave ?? false;
   }
 
-  void _onExitPressed() async {
-    final canLeave = await _confirmExitActiveMatch();
-    if (!mounted) return;
+  void _onExitPressed(BuildContext context, WidgetRef ref) async {
+    final canLeave = await _confirmExitActiveMatch(context, ref);
+    if (!context.mounted) return;
     if (canLeave) {
       Navigator.of(context).pop();
     }
   }
+}
+
+/// Pauses the match when the app is backgrounded (lifecycle wiring only —
+/// no state management lives here).
+class _AppLifecycleObserver extends ConsumerStatefulWidget {
+  final Widget child;
+
+  const _AppLifecycleObserver({required this.child});
 
   @override
-  Widget build(BuildContext context) {
-    final strings = AppStrings(isArabic: widget.isArabic);
-    final matchState = _engine.state;
-    final roundState = matchState.roundState;
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
+  ConsumerState<_AppLifecycleObserver> createState() => _AppLifecycleObserverState();
+}
 
-    final isNonFinalRoundEnded = matchState.isRoundOver && !matchState.isFinalRound;
-    final isMatchConcluded = matchState.isMatchOver;
-    final isPaused = matchState.isPaused;
-
-    return PopScope(
-      canPop: isMatchConcluded || roundState.moveHistory.isEmpty,
-      onPopInvokedWithResult: (didPop, _) async {
-        if (didPop) return;
-        final canLeave = await _confirmExitActiveMatch();
-        if (!context.mounted) return;
-        if (canLeave) {
-          Navigator.of(context).pop();
-        }
-      },
-      child: Scaffold(
-        backgroundColor: NeonColors.background,
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: NeonColors.textSecondary),
-            tooltip: strings.exitToHome,
-            onPressed: _onExitPressed,
-          ),
-          title: Text(strings.presetTitle(widget.matchConfig.boardConfig)),
-          actions: [
-            if (!matchState.isRoundOver)
-              IconButton(
-                tooltip: isPaused ? strings.resumeGame : strings.pauseGame,
-                icon: Icon(
-                  isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                  color: NeonColors.amberGold,
-                ),
-                onPressed: () {
-                  if (isPaused) {
-                    _engine.resume();
-                  } else {
-                    _engine.pause();
-                  }
-                },
-              ),
-            IconButton(
-              tooltip: strings.resetGame,
-              icon: const Icon(Icons.refresh_rounded, color: NeonColors.cyanX),
-              onPressed: _onReplayRoundPressed,
-            ),
-          ],
-        ),
-        body: Container(
-          decoration: NeonColors.cyberBackground,
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Column(
-                children: [
-                  // Player Turn HUD with Scores, Rounds, Chess Clocks, and Status
-                  PlayerTurnHeader(
-                    currentPlayer: roundState.currentPlayer,
-                    config: widget.matchConfig.boardConfig,
-                    scoreX: matchState.scoreX,
-                    scoreO: matchState.scoreO,
-                    currentRound: matchState.currentRound,
-                    totalRounds: matchState.config.totalRounds,
-                    remainingTimeX: matchState.remainingTimeX,
-                    remainingTimeO: matchState.remainingTimeO,
-                    isTimerEnabled: matchState.isTimerEnabled,
-                    isPaused: isPaused,
-                    status: roundState.status,
-                    strings: strings,
-                  ),
-                  const SizedBox(height: 10),
-
-                  // Pause Overlay Banner if Match is Paused
-                  if (isPaused)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF160E36),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: NeonColors.amberGold, width: 1.5),
-                        boxShadow: NeonColors.glow(color: NeonColors.amberGold, blur: 10),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.pause_circle_filled_rounded, color: NeonColors.amberGold, size: 22),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              strings.matchPausedDesc,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          TextButton(
-                            style: TextButton.styleFrom(
-                              backgroundColor: NeonColors.amberGold.withValues(alpha: 0.2),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                side: const BorderSide(color: NeonColors.amberGold),
-                              ),
-                            ),
-                            onPressed: () => _engine.resume(),
-                            child: Text(
-                              strings.resumeGame,
-                              style: const TextStyle(
-                                color: NeonColors.amberGold,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  // Single unified cyber-neon game board
-                  Expanded(
-                    child: Center(
-                      child: GameGridWidget(
-                        config: widget.matchConfig.boardConfig,
-                        board: roundState.board,
-                        winningLine: roundState.winningLine,
-                        allWinningLines: roundState.status is GameWon
-                            ? (roundState.status as GameWon).allWinningLines
-                            : null,
-                        winner: roundState.winner,
-                        currentPlayer: roundState.currentPlayer,
-                        onCellTap: _handleCellTap,
-                        isArabic: widget.isArabic,
-                      ),
-                    ),
-                  ),
-
-                  // Non-obscuring Round End Transition Banner
-                  if (isNonFinalRoundEnded)
-                    RoundEndBanner(
-                      matchState: matchState,
-                      onNextRound: _advanceNextRound,
-                      strings: strings,
-                      reduceMotion: reduceMotion,
-                    ),
-
-                  const SizedBox(height: 10),
-
-                  // Responsive Bottom Control Bar (No text clipping)
-                  if (isMatchConcluded)
-                    Row(
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: NeonButton(
-                            label: strings.playAgain,
-                            icon: Icons.replay_rounded,
-                            isSolid: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                            onPressed: _restartMatch,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 4,
-                          child: NeonButton(
-                            label: strings.viewResult,
-                            icon: Icons.emoji_events_outlined,
-                            isSecondary: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                            onPressed: _presentFinalMatchDialog,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 3,
-                          child: NeonButton(
-                            label: strings.exitToHome,
-                            icon: Icons.home_outlined,
-                            isSecondary: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
-                            onPressed: _onExitPressed,
-                          ),
-                        ),
-                      ],
-                    )
-                  else if (isNonFinalRoundEnded)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: NeonButton(
-                            label: strings.nextRoundNow,
-                            icon: Icons.skip_next_rounded,
-                            isSolid: true,
-                            color: NeonColors.purpleNeon,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            onPressed: _advanceNextRound,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: NeonButton(
-                            label: strings.exitToHome,
-                            icon: Icons.home_outlined,
-                            isSecondary: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                            onPressed: _onExitPressed,
-                          ),
-                        ),
-                      ],
-                    )
-                  else
-                    Row(
-                      children: [
-                        Expanded(
-                          child: NeonButton(
-                            label: isPaused ? strings.resumeGame : strings.pauseGame,
-                            icon: isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                            isSecondary: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                            onPressed: () {
-                              if (isPaused) {
-                                _engine.resume();
-                              } else {
-                                _engine.pause();
-                              }
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: NeonButton(
-                            label: strings.resetGame,
-                            icon: Icons.refresh,
-                            isSecondary: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                            onPressed: _onReplayRoundPressed,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: NeonButton(
-                            label: strings.exitToHome,
-                            icon: Icons.home_outlined,
-                            isSecondary: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
-                            onPressed: _onExitPressed,
-                          ),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+class _AppLifecycleObserverState extends ConsumerState<_AppLifecycleObserver>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
   }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      // Approved background policy: freeze the chess clock AND the transition
+      // countdown on background, regardless of the match phase (pause()
+      // itself no-ops where there is nothing to freeze). A pending final-
+      // result presentation is frozen too. Resume stays manual for the
+      // countdown: this observer never resumes it.
+      ref
+          .read(matchControllerProvider.notifier)
+          .pause(freezeResultPresentation: true);
+    } else if (state == AppLifecycleState.resumed) {
+      // Adopted final-result policy: a result frozen by the background is
+      // presented immediately on return — no manual resume required. The
+      // transition countdown is untouched (stays frozen until manual resume).
+      ref.read(matchControllerProvider.notifier).onAppResumed();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

@@ -33,7 +33,6 @@ void main() {
       test('initializes with default starting player X and empty board', () {
         final engine = GameEngine(
           config: BoardConfig.classic3x3(),
-          clock: () => fixedTime,
         );
 
         expect(engine.currentPlayer, equals(Player.x));
@@ -44,14 +43,17 @@ void main() {
         expect(engine.moveHistory, isEmpty);
       });
 
-      test('uses injected clock for recorded moves', () {
+      test('records the caller-provided timestamp for display only', () {
         final engine = GameEngine(
           config: BoardConfig.classic3x3(),
-          clock: () => fixedTime,
         );
 
-        engine.makeMove(const Position(0, 0));
+        engine.makeMove(const Position(0, 0), timestamp: fixedTime);
         expect(engine.moveHistory.first.timestamp, equals(fixedTime));
+
+        // Without an explicit stamp the record keeps a null display timestamp
+        engine.makeMove(const Position(1, 0));
+        expect(engine.moveHistory.last.timestamp, isNull);
       });
 
       test('allows configuring custom starting player O', () {

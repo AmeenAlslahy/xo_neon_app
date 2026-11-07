@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/neon_colors.dart';
+import '../../../../core/l10n/locale_providers.dart';
 import '../../domain/xo_engine.dart';
 import 'neon_o_widget.dart';
 import 'neon_x_widget.dart';
@@ -15,7 +17,7 @@ import 'neon_x_widget.dart';
 /// Enforced via `Directionality(textDirection: TextDirection.ltr)` on the grid container,
 /// guaranteeing that touch targets, winning line geometry, and test fixtures are 100%
 /// synchronized and invariant to device text direction (RTL or LTR).
-class GameGridWidget extends StatefulWidget {
+class GameGridWidget extends ConsumerStatefulWidget {
   final BoardConfig config;
   final GameBoard board;
   final WinningLine? winningLine;
@@ -23,7 +25,6 @@ class GameGridWidget extends StatefulWidget {
   final Player? winner;
   final Player currentPlayer;
   final void Function(Position position)? onCellTap;
-  final bool isArabic;
 
   const GameGridWidget({
     super.key,
@@ -34,14 +35,13 @@ class GameGridWidget extends StatefulWidget {
     this.winner,
     this.currentPlayer = Player.x,
     this.onCellTap,
-    this.isArabic = true,
   });
 
   @override
-  State<GameGridWidget> createState() => _GameGridWidgetState();
+  ConsumerState<GameGridWidget> createState() => _GameGridWidgetState();
 }
 
-class _GameGridWidgetState extends State<GameGridWidget>
+class _GameGridWidgetState extends ConsumerState<GameGridWidget>
     with SingleTickerProviderStateMixin {
   final TransformationController _transformController =
       TransformationController();
@@ -50,6 +50,9 @@ class _GameGridWidgetState extends State<GameGridWidget>
   bool _isZoomed = false;
   bool _isInteracting = false;
   DateTime _lastInteractionEndTime = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// Bilingual labels/semantics read straight from Riverpod (no prop drilling).
+  bool get _isArabic => ref.watch(localeProvider);
 
   @override
   void initState() {
@@ -285,8 +288,8 @@ class _GameGridWidgetState extends State<GameGridWidget>
                           const SizedBox(width: 4),
                           Text(
                             _isZoomed
-                                ? (widget.isArabic ? 'إعادة الرؤية كاملة (1x)' : 'Reset View (1x)')
-                                : (widget.isArabic ? 'تكبير الرقعة للّمس الدقيق' : 'Tap to Zoom In'),
+                                ? (_isArabic ? 'إعادة الرؤية كاملة (1x)' : 'Reset View (1x)')
+                                : (_isArabic ? 'تكبير الرقعة للّمس الدقيق' : 'Tap to Zoom In'),
                             style: TextStyle(
                               color: _isZoomed ? NeonColors.amberGold : NeonColors.textSecondary,
                               fontSize: 10,
@@ -316,10 +319,10 @@ class _GameGridWidgetState extends State<GameGridWidget>
     final row1Based = position.row + 1;
     final col1Based = position.col + 1;
 
-    final cellSemanticLabel = widget.isArabic
+    final cellSemanticLabel = _isArabic
         ? 'الخانة: الصف $row1Based، العمود $col1Based'
         : 'Cell row $row1Based column $col1Based';
-    final cellValue = player?.symbol ?? (widget.isArabic ? 'فارغة' : 'Empty');
+    final cellValue = player?.symbol ?? (_isArabic ? 'فارغة' : 'Empty');
 
     return Semantics(
       label: cellSemanticLabel,

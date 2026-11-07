@@ -1,34 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app/theme/neon_theme.dart';
+import 'core/l10n/locale_providers.dart';
 import 'features/game/presentation/screens/home_screen.dart';
 
 void main() {
-  runApp(const XoNeonApp());
+  runApp(const ProviderScope(child: XoNeonApp()));
 }
 
-/// Root application widget configuring dark theme, RTL Arabic support, and screen flow.
-class XoNeonApp extends StatefulWidget {
+/// Root application widget configuring dark theme, RTL Arabic support, and
+/// screen flow. The active language lives in [localeProvider].
+class XoNeonApp extends ConsumerWidget {
   const XoNeonApp({super.key});
 
   @override
-  State<XoNeonApp> createState() => _XoNeonAppState();
-}
-
-class _XoNeonAppState extends State<XoNeonApp> {
-  bool _isArabic = true;
-
-  void _toggleLanguage() {
-    setState(() => _isArabic = !_isArabic);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isArabic = ref.watch(localeProvider);
     return MaterialApp(
       title: 'XO Neon',
       debugShowCheckedModeBanner: false,
       theme: NeonTheme.darkTheme,
-      locale: Locale(_isArabic ? 'ar' : 'en'),
+      locale: Locale(isArabic ? 'ar' : 'en'),
       supportedLocales: const [
         Locale('ar'),
         Locale('en'),
@@ -38,10 +31,7 @@ class _XoNeonAppState extends State<XoNeonApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: HomeScreen(
-        isArabic: _isArabic,
-        onToggleLanguage: _toggleLanguage,
-      ),
+      home: const HomeScreen(),
     );
   }
 }

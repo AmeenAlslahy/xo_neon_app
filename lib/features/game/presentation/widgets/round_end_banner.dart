@@ -1,72 +1,28 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/neon_colors.dart';
-import '../../../../core/l10n/app_strings.dart';
+import '../../../../core/l10n/locale_providers.dart';
 import '../../domain/xo_engine.dart';
 
-/// Non-obscuring banner presented between rounds showing the round outcome,
-/// updated score, and a 3-second auto-transition countdown with a quick skip option.
-class RoundEndBanner extends StatefulWidget {
+/// Passive banner presented between rounds showing the round outcome, the
+/// updated score, and the controller-owned auto-transition countdown.
+/// ALL timing lives in [MatchController]; this widget only renders.
+class RoundEndBanner extends ConsumerWidget {
   final MatchState matchState;
+  final int transitionSecondsRemaining;
   final VoidCallback onNextRound;
-  final AppStrings strings;
-  final bool reduceMotion;
 
   const RoundEndBanner({
     super.key,
     required this.matchState,
+    this.transitionSecondsRemaining = 3,
     required this.onNextRound,
-    this.strings = const AppStrings(),
-    this.reduceMotion = false,
   });
 
   @override
-  State<RoundEndBanner> createState() => _RoundEndBannerState();
-}
-
-class _RoundEndBannerState extends State<RoundEndBanner> {
-  int _secondsRemaining = 3;
-  Timer? _countdownTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _startCountdown();
-  }
-
-  void _startCountdown() {
-    if (widget.reduceMotion) {
-      // In reduced motion, 2 seconds for comfortable reading
-      _secondsRemaining = 2;
-    } else {
-      _secondsRemaining = 3;
-    }
-
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() {
-        _secondsRemaining--;
-      });
-      if (_secondsRemaining <= 0) {
-        timer.cancel();
-        widget.onNextRound();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _countdownTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = widget.matchState;
-    final strings = widget.strings;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = matchState;
+    final strings = ref.watch(stringsProvider);
     final isWon = state.roundEndReason == RoundEndReason.win;
     final isTimeout = state.roundEndReason == RoundEndReason.timeout;
 
@@ -87,6 +43,8 @@ class _RoundEndBannerState extends State<RoundEndBanner> {
       headline = strings.roundDrawMessage;
       icon = Icons.handshake_outlined;
     }
+
+    final seconds = transitionSecondsRemaining > 0 ? transitionSecondsRemaining : 1;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -122,7 +80,7 @@ class _RoundEndBannerState extends State<RoundEndBanner> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  strings.nextRoundIn(_secondsRemaining > 0 ? _secondsRemaining : 1),
+                  strings.nextRoundIn(seconds),
                   style: TextStyle(
                     color: themeColor,
                     fontSize: 12,
@@ -142,10 +100,7 @@ class _RoundEndBannerState extends State<RoundEndBanner> {
               ),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             ),
-            onPressed: () {
-              _countdownTimer?.cancel();
-              widget.onNextRound();
-            },
+            onPressed: onNextRound,
             child: Text(
               strings.nextRoundNow,
               style: const TextStyle(

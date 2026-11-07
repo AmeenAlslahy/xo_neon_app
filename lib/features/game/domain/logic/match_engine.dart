@@ -1,36 +1,51 @@
-import 'dart:async';
 import '../models/cell_position.dart';
 import '../models/game_status.dart';
 import '../models/match_config.dart';
 import '../models/match_state.dart';
 import '../models/player.dart';
+import '../time/time_source.dart';
 import 'game_engine.dart';
 import 'win_evaluator.dart';
 
 /// Callback invoked whenever [MatchState] updates.
 typedef MatchStateListener = void Function(MatchState state);
 
-/// Authoritative coordinator managing multi-round local matches,
-/// scoring stability, round transitions, and chess-clock timers.
+/// Authoritative rules and state machine for multi-round local matches:
+/// scoring stability, round transitions, and chess-clock accounting.
+///
+/// Purity contract:
+/// - This class schedules NO timers. The application layer (`MatchController`)
+///   owns all scheduling and drives [tick] pulses whenever it wants.
+/// - All chess-clock time flows through the injected monotonic [timeSource];
+///   wall-clock `DateTime` values ([wallClock], [Move.timestamp]) are
+///   display/log metadata only and NEVER influence remaining time.
 class MatchEngine {
   final WinEvaluator evaluator;
-  final DateTime Function() clock;
+
+  /// Monotonic time source driving every chess-clock deduction.
+  final TimeSource timeSource;
+
+  /// Optional wall-clock sampler used exclusively to stamp [Move] records
+  /// for display/logging. Never used for countdown math.
+  final DateTime Function()? wallClock;
+
   final List<MatchStateListener> _listeners = [];
 
   late MatchState _state;
   late GameEngine _roundEngine;
 
-  Timer? _ticker;
-  DateTime? _lastTickTime;
+  /// Monotonic anchor of the last processed time instant.
+  /// Null while the clock is suspended (paused / round concluded).
+  Duration? _lastAnchor;
   bool _roundResultRecorded = false;
 
   MatchEngine({
     required MatchConfig config,
     Player startingPlayer = Player.x,
     this.evaluator = const WinEvaluator(),
-    this.clock = DateTime.now,
-    bool autoStartTimer = true,
-  }) {
+    TimeSource? timeSource,
+    this.wallClock,
+  }) : timeSource = timeSource ?? StopwatchTimeSource() {
     _state = MatchState.initial(
       config: config,
       startingPlayer: startingPlayer,
@@ -40,14 +55,9 @@ class MatchEngine {
       config: config.boardConfig,
       startingPlayer: startingPlayer,
       evaluator: evaluator,
-      clock: clock,
     );
 
-    _lastTickTime = clock();
-
-    if (config.timerConfig.enabled && autoStartTimer) {
-      _startTicker();
-    }
+    _lastAnchor = this.timeSource.now();
   }
 
   MatchState get state => _state;
@@ -79,39 +89,29 @@ class MatchEngine {
     }
   }
 
-  /// Starts internal periodic ticker for real-time countdown.
-  void _startTicker() {
-    _ticker?.cancel();
-    _lastTickTime = clock();
-    _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      tick();
-    });
+  /// Suspends the clock anchor (round concluded or paused).
+  void _suspendAnchor() {
+    _lastAnchor = null;
   }
 
-  void _stopTicker() {
-    _ticker?.cancel();
-    _ticker = null;
-    _lastTickTime = null;
-  }
-
-  /// Incremental time update. Can be called automatically by [_ticker]
-  /// or manually in unit tests with custom [delta] or sampled [clock].
+  /// Applies a chess-clock pulse. Called by the application layer
+  /// (`MatchController` ticker) with a measured [delta], or manually in tests;
+  /// without a [delta] the pulse is sampled from the monotonic [timeSource].
   void tick([Duration? delta]) {
     if (_state.phase != MatchPhase.inProgress) return;
     if (!_state.isTimerEnabled) return;
     if (_roundResultRecorded) return;
 
-    final now = clock();
-    final elapsed = delta ??
-        (_lastTickTime != null ? now.difference(_lastTickTime!) : Duration.zero);
+    final now = timeSource.now();
+    final elapsed = delta ?? (_lastAnchor != null ? now - _lastAnchor! : Duration.zero);
 
-    // Stale/backward clock sample (DateTime.now is not guaranteed monotonic):
-    // contributes no deduction and must not rewind the anchor, otherwise the
-    // next honest sample would re-count an already-processed period.
+    // Stale/backward sample guard (only reachable through a non-monotonic
+    // test fake): contributes no deduction and must not rewind the anchor,
+    // otherwise the next honest sample would re-count processed time.
     if (elapsed <= Duration.zero) return;
 
-    if (_lastTickTime == null || now.isAfter(_lastTickTime!)) {
-      _lastTickTime = now;
+    if (_lastAnchor == null || now > _lastAnchor!) {
+      _lastAnchor = now;
     }
 
     final activePlayer = _state.currentTurnPlayer;
@@ -142,7 +142,7 @@ class MatchEngine {
   void _handleTimeout({required Player timedOutPlayer}) {
     if (_roundResultRecorded) return;
     _roundResultRecorded = true;
-    _stopTicker();
+    _suspendAnchor();
 
     final roundWinner = timedOutPlayer.other;
     final newScoreX = roundWinner == Player.x ? _state.scoreX + 1 : _state.scoreX;
@@ -168,33 +168,20 @@ class MatchEngine {
 
   /// Executes a move at the specified [position].
   ///
-  /// Checks for timeout, updates chess-clock, and transitions game state.
+  /// [timestamp] is a wall-clock stamp recorded on the [Move] for display and
+  /// logging ONLY — it never influences remaining chess-clock time. Deduction
+  /// of the elapsed slice up to the move instant is measured exclusively from
+  /// the monotonic [timeSource] against the internal anchor.
   void makeMove(Position position, {DateTime? timestamp}) {
     if (_state.phase != MatchPhase.inProgress) return;
 
-    final moveTimestamp = timestamp ?? clock();
-
-    // 1. Process elapsed time up to move execution.
-    //
-    // Stale-sample policy: the engine's own last processed instant
-    // ([_lastTickTime]) is the authoritative time anchor. A timestamp at or
-    // before the anchor (out-of-order client stamp, or a backward system-clock
-    // jump — DateTime.now is not monotonic) carries zero deductible time,
-    // refunds no balance, and must not rewind the anchor. Known wall-clock
-    // limits that this policy does NOT solve: a backward jump landing AFTER
-    // the anchor is measured as a small honest sample, so a late move may
-    // slip past real expiry until the engine's next observation; and a
-    // forward jump is deducted fully, so a premature timeout is possible.
-    // Durable fix (deferred to the architectural batch): inject a monotonic
-    // TimeSource (Stopwatch-based) instead of wall-clock samples.
+    // 1. Deduct elapsed time up to the move instant (monotonic source only).
     if (_state.isTimerEnabled) {
-      final anchor = _lastTickTime;
-      final isStale = anchor != null && !moveTimestamp.isAfter(anchor);
-      final elapsed = (anchor != null && !isStale)
-          ? moveTimestamp.difference(anchor)
-          : Duration.zero;
-      if (!isStale) {
-        _lastTickTime = moveTimestamp;
+      final now = timeSource.now();
+      final anchor = _lastAnchor;
+      final elapsed = (anchor != null && now > anchor) ? now - anchor : Duration.zero;
+      if (anchor == null || now > anchor) {
+        _lastAnchor = now;
       }
 
       final activePlayer = _state.currentTurnPlayer;
@@ -217,15 +204,15 @@ class MatchEngine {
       }
     }
 
-    // 2. Execute board move on inner engine
+    // 2. Execute board move on inner engine (timestamp is record-only).
     try {
-      _roundEngine.makeMove(position, timestamp: moveTimestamp);
+      _roundEngine.makeMove(position, timestamp: timestamp ?? wallClock?.call());
       _state = _state.copyWith(roundState: _roundEngine.state);
 
       // 3. Check for round conclusion
       if (_roundEngine.isGameOver && !_roundResultRecorded) {
         _roundResultRecorded = true;
-        _stopTicker();
+        _suspendAnchor();
 
         if (_roundEngine.isWon) {
           final winner = _roundEngine.winner!;
@@ -264,8 +251,8 @@ class MatchEngine {
   /// If the current round was the final round, concludes the match.
   void nextRound() {
     // Guard: advancing is only legal from a concluded round. Repeated or
-    // racing invocations (banner auto-fire overlapping a manual tap) become
-    // safe no-ops instead of skipping a round or wiping an active board.
+    // racing invocations (auto-transition overlapping a manual command)
+    // become safe no-ops instead of skipping a round or wiping an active board.
     if (_state.phase != MatchPhase.roundEnded) return;
 
     if (_state.isFinalRound) {
@@ -273,7 +260,6 @@ class MatchEngine {
       return;
     }
 
-    _stopTicker();
     _roundResultRecorded = false;
 
     final nextRoundNumber = _state.currentRound + 1;
@@ -283,7 +269,6 @@ class MatchEngine {
       config: _state.config.boardConfig,
       startingPlayer: nextStarter,
       evaluator: evaluator,
-      clock: clock,
     );
 
     final resetTime = _state.config.timerConfig.durationPerPlayer;
@@ -298,11 +283,7 @@ class MatchEngine {
       remainingTimeO: resetTime,
     );
 
-    _lastTickTime = clock();
-
-    if (_state.isTimerEnabled) {
-      _startTicker();
-    }
+    _lastAnchor = timeSource.now();
 
     _notifyListeners();
   }
@@ -314,7 +295,7 @@ class MatchEngine {
       return;
     }
 
-    _stopTicker();
+    _suspendAnchor();
 
     Player? overallWinner;
     if (_state.scoreX > _state.scoreO) {
@@ -333,13 +314,14 @@ class MatchEngine {
     _notifyListeners();
   }
 
-  /// Pauses active gameplay and freezes timers (e.g. user pause or app backgrounded).
+  /// Pauses active gameplay and freezes timers (e.g. user pause or app
+  /// backgrounded). The caller (application layer) owns any ticker.
   void pause() {
     if (_state.phase != MatchPhase.inProgress) return;
 
-    if (_state.isTimerEnabled && _lastTickTime != null) {
-      // Deduct elapsed slice up to pause instant
-      final elapsed = clock().difference(_lastTickTime!);
+    if (_state.isTimerEnabled && _lastAnchor != null) {
+      // Deduct elapsed slice up to the pause instant (monotonic source).
+      final elapsed = timeSource.now() - _lastAnchor!;
       if (elapsed > Duration.zero) {
         final active = _state.currentTurnPlayer;
         if (active == Player.x) {
@@ -362,13 +344,13 @@ class MatchEngine {
       }
     }
 
-    _stopTicker();
-    _lastTickTime = null;
+    _lastAnchor = null;
     _state = _state.copyWith(phase: MatchPhase.paused);
     _notifyListeners();
   }
 
-  /// Resumes gameplay and timers from paused state.
+  /// Resumes gameplay from paused state. The caller (application layer)
+  /// restarts its ticker if desired.
   void resume() {
     if (_state.phase != MatchPhase.paused) return;
 
@@ -381,25 +363,20 @@ class MatchEngine {
       }
     }
 
-    _lastTickTime = clock();
+    _lastAnchor = timeSource.now();
     _state = _state.copyWith(phase: MatchPhase.inProgress);
-    if (_state.isTimerEnabled) {
-      _startTicker();
-    }
     _notifyListeners();
   }
 
   /// Resets the current active round's board and clocks,
   /// keeping existing match scores and the starting player of this round intact.
   void resetCurrentRound() {
-    _stopTicker();
     _roundResultRecorded = false;
 
     _roundEngine = GameEngine(
       config: _state.config.boardConfig,
       startingPlayer: _state.roundStartingPlayer,
       evaluator: evaluator,
-      clock: clock,
     );
 
     final resetTime = _state.config.timerConfig.durationPerPlayer;
@@ -412,18 +389,13 @@ class MatchEngine {
       remainingTimeO: resetTime,
     );
 
-    _lastTickTime = clock();
-
-    if (_state.isTimerEnabled) {
-      _startTicker();
-    }
+    _lastAnchor = timeSource.now();
 
     _notifyListeners();
   }
 
   /// Starts a brand new match with reset scores (0 - 0) and round 1.
   void restartMatch({MatchConfig? newConfig}) {
-    _stopTicker();
     _roundResultRecorded = false;
 
     final activeConfig = newConfig ?? _state.config;
@@ -436,20 +408,14 @@ class MatchEngine {
       config: activeConfig.boardConfig,
       startingPlayer: Player.x,
       evaluator: evaluator,
-      clock: clock,
     );
 
-    _lastTickTime = clock();
-
-    if (activeConfig.timerConfig.enabled) {
-      _startTicker();
-    }
+    _lastAnchor = timeSource.now();
 
     _notifyListeners();
   }
 
   void dispose() {
-    _stopTicker();
     _listeners.clear();
   }
 }
