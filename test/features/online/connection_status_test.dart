@@ -41,6 +41,18 @@ void main() {
       expect(controller.lastConnectedAt, connectedTimestamp);
     });
 
+    test('disposing during async Firebase bootstrap does not throw', () async {
+      // The connection bootstrap now waits for the shared Firebase
+      // initialization future. Disposing the provider while that future is
+      // still pending must not write state after dispose (which Riverpod
+      // reports as an unhandled async error).
+      final container = ProviderContainer();
+      container.read(connectionStatusProvider);
+      container.dispose();
+
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    });
+
     testWidgets('ConnectionStatusBadge renders compact dot without label by default', (tester) async {
       final container = ProviderContainer();
       addTearDown(container.dispose);
