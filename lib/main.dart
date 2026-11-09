@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,20 +11,22 @@ import 'features/game/presentation/screens/home_screen.dart';
 import 'features/online/application/auth_service.dart';
 import 'features/online/application/firebase_service.dart';
 
+/// Local settings are the only startup dependency: they are a tiny local
+/// read and the UI immediately picks up the persisted sound/language state.
+/// The timeout guarantees a wedged platform channel cannot hold the splash
+/// screen hostage (the app then starts with default settings).
+const Duration _prefsTimeout = Duration(seconds: 3);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   SharedPreferences? prefs;
   try {
-    prefs = await SharedPreferences.getInstance();
+    prefs = await SharedPreferences.getInstance().timeout(_prefsTimeout);
+  } on TimeoutException {
+    debugPrint('SharedPreferences init timed out; using defaults');
   } catch (e) {
     debugPrint('SharedPreferences init note: $e');
-  }
-
-  try {
-    await FirebaseService.initialize();
-    await AuthService().ensureSignedIn();
-  } catch (e) {
-    debugPrint('Firebase initialization note: $e');
   }
 
   runApp(
@@ -33,6 +37,16 @@ void main() async {
       child: const XoNeonApp(),
     ),
   );
+
+  // Online services need Firebase plus an anonymous auth round-trip, which
+  // may take seconds (or wait for a network timeout) on a cold start. None of
+  // that is needed to render the home screen, so it runs only after the first
+  // frame. Create/join room flows await initialization before touching
+  // Firebase, and the connection badge subscribes once initialization ends.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(FirebaseService.initialize());
+    unawaited(AuthService().ensureSignedIn());
+  });
 }
 
 /// Root application widget configuring dark theme, RTL Arabic support, and

@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'firebase_service.dart';
+
 /// Provider exposing the singleton [AuthService].
 final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 
@@ -18,6 +20,11 @@ class AuthService {
   /// that user. Otherwise performs an anonymous sign-in and returns the new user.
   Future<User?> ensureSignedIn() async {
     try {
+      // The injection point (tests) bypasses Firebase entirely; production
+      // paths make sure the default app exists before asking for a session.
+      if (auth == null) {
+        await FirebaseService.initialize();
+      }
       final current = _instance.currentUser;
       if (current != null) {
         return current;

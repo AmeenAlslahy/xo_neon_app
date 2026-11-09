@@ -1,8 +1,9 @@
 import 'dart:async';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core/firebase_core.dart' hide FirebaseService;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../app/firebase_options.dart';
+import 'firebase_service.dart';
 
 /// Connection states for real-time Firebase services.
 enum ConnectionStatus {
@@ -22,16 +23,25 @@ class ConnectionController extends Notifier<ConnectionStatus> {
 
   @override
   ConnectionStatus build() {
+    var disposed = false;
     ref.onDispose(() {
+      disposed = true;
       _subscription?.cancel();
     });
 
-    _listenToConnection();
+    // Startup only warms Firebase up in the background; the badge must wait
+    // for that shared initialization instead of failing once and showing
+    // "disconnected" forever.
+    unawaited(_listenToConnection(() => disposed));
     return ConnectionStatus.connecting;
   }
 
-  void _listenToConnection() {
+  Future<void> _listenToConnection(bool Function() isDisposed) async {
     try {
+      await FirebaseService.initialize();
+      if (isDisposed()) {
+        return;
+      }
       final databaseUrl = DefaultFirebaseOptions.currentPlatform.databaseURL;
       final db = databaseUrl != null && databaseUrl.isNotEmpty
           ? FirebaseDatabase.instanceFor(
@@ -42,6 +52,9 @@ class ConnectionController extends Notifier<ConnectionStatus> {
       final connectedRef = db.ref('.info/connected');
       _subscription = connectedRef.onValue.listen(
         (event) {
+          if (isDisposed()) {
+            return;
+          }
           final isConnected = event.snapshot.value == true;
           if (isConnected) {
             _lastConnectedAt = DateTime.now();
@@ -53,12 +66,16 @@ class ConnectionController extends Notifier<ConnectionStatus> {
           }
         },
         onError: (_) {
-          state = ConnectionStatus.disconnected;
+          if (!isDisposed()) {
+            state = ConnectionStatus.disconnected;
+          }
         },
       );
     } catch (_) {
       // Offline, test, or uninitialized Firebase environment fallback
-      state = ConnectionStatus.disconnected;
+      if (!isDisposed()) {
+        state = ConnectionStatus.disconnected;
+      }
     }
   }
 
