@@ -1,0 +1,21 @@
+{
+  "rules": {
+    "rooms": {
+      "$roomCode": {
+        ".read": "auth != null",
+        ".write": "auth != null && (!data.exists() || data.child('hostUid').val() === auth.uid || data.child('guestUid').val() === auth.uid || (data.child('status').val() === 'waitingForGuest' && newData.child('guestUid').val() === auth.uid))",
+        "status": {
+          ".validate": "newData.isString() && (newData.val() === 'waitingForGuest' || newData.val() === 'ready' || newData.val() === 'inGame' || newData.val() === 'abandoned' || newData.val() === 'finished')"
+        },
+        "config": {
+          "boardSize": {
+            ".validate": "newData.isNumber() && (newData.val() === 3 || newData.val() === 6 || newData.val() === 9 || newData.val() === 11)"
+          },
+          "winStreak": {
+            ".validate": "newData.isNumber() && newData.val() >= 3 && newData.val() <= 6"
+          }
+        }
+      }
+    }
+  }
+}

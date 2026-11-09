@@ -22,6 +22,18 @@ class AppStrings {
   String get comingSoonBadge =>
       isArabic ? 'قريباً (مرحلة الأونلاين)' : 'Coming Soon (Online Phase)';
 
+  // Game mode & system opponent (P2)
+  String get chooseMode => isArabic ? 'نمط اللعب' : 'Game Mode';
+  String get modeLocalShort => isArabic ? 'لاعبان محليًا' : 'Two Players';
+  String get modeSystem => isArabic ? 'ضد النظام' : 'vs System';
+  String get systemLevelTitle => isArabic ? 'مستوى النظام' : 'System Level';
+  String get difficultyEasy => isArabic ? 'سهل' : 'Easy';
+  String get difficultyMedium => isArabic ? 'متوسط' : 'Medium';
+  String get difficultyHard => isArabic ? 'صعب' : 'Hard';
+  String get chooseYourMark => isArabic ? 'اختر علامتك' : 'Choose Your Mark';
+  String get playAsX => isArabic ? 'تلعب X' : 'You play X';
+  String get playAsO => isArabic ? 'تلعب O' : 'You play O';
+
   // Settings & Toggles
   String get settingsTitle => isArabic ? 'الإعدادات السريعة' : 'Quick Settings';
   String get reducedMotion => isArabic ? 'تقليل الحركة' : 'Reduced Motion';
@@ -124,6 +136,7 @@ class AppStrings {
 
   // Chess-Clock Style Timer
   String get timerOption => isArabic ? 'المؤقت (ساعة شطرنج)' : 'Timer (Chess Clock)';
+  String get chessClockBadge => isArabic ? 'ساعة شطرنج' : 'Chess Clock';
   String get noTimer => isArabic ? 'بدون مؤقت' : 'No Timer';
   String get oneMinutePerPlayer => isArabic ? 'دقيقة لكل لاعب' : '1 min per player';
   String get threeMinutesPerPlayer => isArabic ? '٣ دقائق لكل لاعب' : '3 mins per player';
@@ -161,4 +174,90 @@ class AppStrings {
       ? 'تعادل نهائي في المباراة (${toArabicDigits(score)} - ${toArabicDigits(score)})'
       : 'Final Match Draw ($score - $score)';
   String get roundDrawMessage => isArabic ? 'تعادل في هذه الجولة!' : 'Draw in this round!';
+
+  // Difficulty & Auto-Progression
+  String get difficultyLabel => isArabic ? 'مستوى الصعوبة' : 'Difficulty Level';
+  String difficultyTitle(String name) {
+    switch (name.toLowerCase()) {
+      case 'easy':
+        return difficultyEasy;
+      case 'hard':
+        return difficultyHard;
+      case 'expert':
+        return isArabic ? 'خبير' : 'Expert';
+      case 'master':
+        return isArabic ? 'أستاذ' : 'Master';
+      case 'medium':
+      default:
+        return difficultyMedium;
+    }
+  }
+  String get autoProgression =>
+      isArabic ? 'التدرج التلقائي للصعوبة' : 'Auto Difficulty Progression';
+  String difficultyPromoted(String level) => isArabic
+      ? 'أداء رائع! تم رفع مستوى التحدي إلى: $level'
+      : 'Great performance! Challenge level increased to: $level';
+  String get systemThinking => isArabic ? 'النظام يفكر...' : 'System is thinking...';
+  String movesCount(int count) =>
+      isArabic ? '${toArabicDigits(count)} حركات' : '$count moves';
+  String winRateLabel(int percentage) =>
+      isArabic ? 'نسبة الفوز: ${toArabicDigits(percentage)}%' : 'Win Rate: $percentage%';
+  String get defeatEncouragement =>
+      isArabic ? 'حظ أوفر! كنت قريباً من الفوز' : 'Good effort! You were close!';
+  String streakWins(int count) => isArabic
+      ? '${toArabicDigits(count)} انتصارات متتالية'
+      : '$count win streak';
+
+  // Online & Connection strings
+  String get connectionConnected => isArabic ? 'متصل' : 'Connected';
+  String get connectionConnecting =>
+      isArabic ? 'جارٍ الاتصال...' : 'Connecting...';
+  String get connectionDisconnected => isArabic ? 'غير متصل' : 'Disconnected';
+  String get connectionReconnecting =>
+      isArabic ? 'إعادة الاتصال...' : 'Reconnecting...';
+
+  // Online Multiplayer (Phase 2)
+  String get onlineLobbyTitle => isArabic ? 'اللعب أونلاين' : 'Play Online';
+  String get onlineLobbySubtitle =>
+      isArabic ? 'تحدَّ أصدقاءك في غرف خاصة' : 'Challenge friends in private rooms';
+  String get createRoom => isArabic ? 'إنشاء غرفة' : 'Create Room';
+  String get createRoomDesc => isArabic
+      ? 'أنشئ غرفة وشارك الرمز مع صديقك'
+      : 'Create a room and share the code';
+  String get joinRoom => isArabic ? 'الانضمام إلى غرفة' : 'Join Room';
+  String get joinRoomDesc => isArabic
+      ? 'ادخل رمز الغرفة للانضمام إلى صديقك'
+      : 'Enter a room code to join a friend';
+  String get enterRoomCode => isArabic ? 'أدخل رمز الغرفة' : 'Enter Room Code';
+  String get roomCodeHint => isArabic ? 'مثال: A7K9X2' : 'e.g. A7K9X2';
+  String get roomCodeLabel =>
+      isArabic ? 'رمز الغرفة (6 خانات)' : 'Room Code (6 chars)';
+  String get joinButton => isArabic ? 'انضمام' : 'Join';
+  String get createButton => isArabic ? 'إنشاء الغرفة' : 'Create Room';
+  String get copyCode => isArabic ? 'نسخ الرمز' : 'Copy Code';
+  String get codeCopied =>
+      isArabic ? 'تم نسخ رمز الغرفة إلى الحافظة' : 'Room code copied to clipboard';
+  String get waitingForPlayer =>
+      isArabic ? 'بانتظار انضمام الصديق...' : 'Waiting for friend to join...';
+  String get playerJoined =>
+      isArabic ? 'انضم الصديق! الغرفة جاهزة' : 'Friend joined! Ready to play';
+  String get host => isArabic ? 'المضيف (X)' : 'Host (X)';
+  String get guest => isArabic ? 'الضيف (O)' : 'Guest (O)';
+  String get you => isArabic ? 'أنت' : 'You';
+  String get waitingForHost =>
+      isArabic ? 'بانتظار أن يبدأ المضيف المباراة...' : 'Waiting for host to start...';
+  String get roomNotFound =>
+      isArabic ? 'الغرفة غير موجودة أو انتهت صلاحيتها' : 'Room not found or expired';
+  String get roomFull => isArabic ? 'الغرفة ممتلئة بالفعل' : 'Room is already full';
+  String get invalidRoomCode => isArabic
+      ? 'رمز الغرفة غير صحيح (يجب أن يتكون من 6 خانات)'
+      : 'Invalid room code (must be 6 characters)';
+  String get leaveRoom => isArabic ? 'مغادرة الغرفة' : 'Leave Room';
+  String get leaveRoomConfirm => isArabic
+      ? 'هل أنت متأكد من مغادرة هذه الغرفة؟'
+      : 'Are you sure you want to leave this room?';
+  String get boardSizeLabel => isArabic ? 'حجم اللوحة' : 'Board Size';
+  String get roundsToWinLabel => isArabic ? 'جولات الفوز' : 'Rounds to Win';
+  String get roomStatusAbandoned =>
+      isArabic ? 'تم إلغاء الغرفة من قبل المضيف' : 'Room was abandoned by host';
 }

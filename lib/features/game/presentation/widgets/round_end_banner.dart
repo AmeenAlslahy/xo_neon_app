@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/neon_colors.dart';
 import '../../../../core/l10n/locale_providers.dart';
@@ -50,7 +50,7 @@ class RoundEndBanner extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFF120B28),
+        color: NeonColors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: themeColor, width: 1.8),
         boxShadow: [

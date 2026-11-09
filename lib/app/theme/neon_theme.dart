@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'neon_colors.dart';
 
-/// App theme providing cyber-neon styling across all widgets.
+/// App theme — cyber-neon styling with unified token usage.
 class NeonTheme {
   NeonTheme._();
 
@@ -12,19 +12,21 @@ class NeonTheme {
       scaffoldBackgroundColor: NeonColors.background,
       colorScheme: const ColorScheme.dark(
         primary: NeonColors.cyanX,
-        secondary: NeonColors.magentaO,
+        secondary: NeonColors.orangeO,
         surface: NeonColors.surface,
         onSurface: NeonColors.textPrimary,
+        error: NeonColors.dangerRed,
       ),
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        iconTheme: IconThemeData(color: NeonColors.cyanX),
         titleTextStyle: TextStyle(
           color: NeonColors.textPrimary,
-          fontSize: 20,
+          fontSize: 18,
           fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
+          letterSpacing: 0.8,
         ),
       ),
       cardTheme: CardThemeData(
@@ -40,8 +42,20 @@ class NeonTheme {
         elevation: 16,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: NeonColors.purpleBorder, width: 1.5),
+          side: const BorderSide(color: NeonColors.borderSubtle, width: 1.5),
         ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) return NeonColors.cyanX;
+          return NeonColors.textMuted;
+        }),
+        trackColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return NeonColors.cyanX.withValues(alpha: 0.35);
+          }
+          return NeonColors.borderSubtle;
+        }),
       ),
     );
   }

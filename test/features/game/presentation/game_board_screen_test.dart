@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xo_neon_app/app/theme/neon_theme.dart';
 import 'package:xo_neon_app/core/l10n/locale_providers.dart';
+import '../application/fake_system_move_port.dart';
 import 'package:xo_neon_app/features/game/application/match_providers.dart';
 import 'package:xo_neon_app/features/game/domain/xo_engine.dart';
 import 'package:xo_neon_app/features/game/presentation/screens/game_board_screen.dart';
@@ -30,6 +33,7 @@ void main() {
     bool isArabic = true,
     TextScaler textScaler = TextScaler.noScaling,
     bool disableAnimations = false,
+    FakeSystemMovePort? movePort,
   }) {
     return ProviderScope(
       overrides: [
@@ -39,6 +43,9 @@ void main() {
         ),
         timeSourceProvider.overrideWithValue(FakeTimeSource()),
         localeInitialProvider.overrideWithValue(isArabic),
+        systemMovePortProvider
+            .overrideWithValue(movePort ?? FirstEmptySystemMovePort()),
+        systemThinkingDelayProvider.overrideWithValue(Duration.zero),
       ],
       child: MaterialApp(
         theme: NeonTheme.darkTheme,
@@ -847,5 +854,118 @@ void main() {
     // UI path: while backgrounded, no input is possible, and on return the
     // result presents immediately. The cancel-on-reset path is covered by the
     // MatchController - Final Result Policy container tests.
+  });
+
+  group('GameBoardScreen - vs System (P2 integration)', () {
+    testWidgets('the system replies to the human move and the marks stay fixed', (tester) async {
+      final port = FakeSystemMovePort();
+      await tester.pumpWidget(buildTestableWidget(
+        matchConfig: MatchConfig(
+          boardConfig: BoardConfig.grid3x3,
+          totalRounds: 1,
+          vsSystem: true,
+          humanPlayer: Player.x,
+        ),
+        movePort: port,
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byType(GameOverDialog), findsNothing);
+
+      await tapCell(tester, 0, 0); // human X
+      await tester.pumpAndSettle();
+      // The system O replies at the first empty cell (0,1).
+      expect(find.byType(NeonOWidget), findsNWidgets(2), reason: 'board mark + HUD');
+      expect(find.text('X'), findsOneWidget, reason: 'turn back to the human');
+
+      await tapCell(tester, 1, 0); // human X
+      await tester.pumpAndSettle();
+      // The system O replies again (first empty (0,2)).
+      expect(find.byType(NeonOWidget), findsNWidgets(3), reason: '2 board marks + HUD');
+      expect(port.callCount, 2);
+    });
+
+    testWidgets('the system opens when the human plays O', (tester) async {
+      await tester.pumpWidget(buildTestableWidget(
+        matchConfig: MatchConfig(
+          boardConfig: BoardConfig.grid3x3,
+          totalRounds: 1,
+          vsSystem: true,
+          humanPlayer: Player.o,
+        ),
+        movePort: FakeSystemMovePort(),
+      ));
+      await tester.pumpAndSettle();
+      // The system X opens at (0,0) (first-empty stub).
+      expect(find.byType(NeonXWidget), findsNWidgets(2), reason: 'board mark + HUD');
+      // The human O's turn: tapping applies O.
+      await tapCell(tester, 1, 1);
+      await tester.pumpAndSettle();
+      expect(find.byType(NeonOWidget), findsNWidgets(2), reason: 'board mark + HUD');
+    });
+
+    testWidgets('taps during the system turn are ignored; the gated reply applies after', (tester) async {
+      final gate = Completer<Position?>();
+      final port = FakeSystemMovePort()..enqueueGate(gate);
+      await tester.pumpWidget(buildTestableWidget(
+        matchConfig: MatchConfig(
+          boardConfig: BoardConfig.grid3x3,
+          totalRounds: 1,
+          vsSystem: true,
+          humanPlayer: Player.x,
+        ),
+        movePort: port,
+      ));
+      await tester.pumpAndSettle();
+
+      await tapCell(tester, 0, 0); // human X — the system request is now gated
+      await tester.pumpAndSettle();
+      expect(find.byType(NeonXWidget), findsNWidgets(2), reason: 'board mark + HUD');
+
+      // The system O's turn: taps are ignored (the engine's turn guard).
+      await tapCell(tester, 1, 1);
+      await tester.pumpAndSettle();
+      expect(find.byType(NeonOWidget), findsNWidgets(1),
+          reason: 'HUD only — the tap during the system turn was ignored');
+      expect(find.text('O'), findsOneWidget, reason: 'still the system turn');
+
+      // The gated reply applies at (1,1) — the cell the ignored tap targeted.
+      gate.complete(const Position(1, 1));
+      await tester.pumpAndSettle();
+      expect(find.byType(NeonOWidget), findsNWidgets(2), reason: 'board mark + HUD');
+      expect(find.text('X'), findsOneWidget, reason: 'turn back to the human');
+    });
+
+    testWidgets('vs system across rounds: the human wins round 1 and the system opens round 2 (starter alternation, fixed marks)', (tester) async {
+      final port = FakeSystemMovePort();
+      await tester.pumpWidget(buildTestableWidget(
+        matchConfig: MatchConfig(
+          boardConfig: BoardConfig.grid3x3,
+          totalRounds: 3,
+          vsSystem: true,
+          humanPlayer: Player.x,
+        ),
+        movePort: port,
+      ));
+      await tester.pumpAndSettle();
+
+      // Round 1: human X builds the column win; the system O answers via the
+      // first-empty stub after every human move.
+      await tapCell(tester, 0, 0); // X
+      await tester.pumpAndSettle(); // system replies (0,1)
+      await tapCell(tester, 1, 0); // X
+      await tester.pumpAndSettle(); // system replies (0,2)
+      await tapCell(tester, 2, 0); // X wins column 0
+      await tester.pumpAndSettle();
+      expect(find.text('1'), findsOneWidget, reason: 'score X = 1');
+      expect(find.text('الجولة التالية ⏩'), findsWidgets);
+
+      await tester.tap(find.text('الجولة التالية ⏩').first);
+      await tester.pumpAndSettle();
+      // Round 2: starter O = SYSTEM → the system opens at (0,0).
+      expect(find.text('الجولة ٢ من ٣'), findsOneWidget);
+      expect(find.byType(NeonOWidget), findsNWidgets(2),
+          reason: 'the system O opens (board mark + HUD)');
+      expect(find.text('1'), findsOneWidget, reason: 'score X preserved');
+    });
   });
 }

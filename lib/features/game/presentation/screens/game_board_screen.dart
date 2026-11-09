@@ -26,7 +26,9 @@ class GameBoardScreen extends ConsumerWidget {
     final matchState = ui.match;
     final roundState = matchState.roundState;
     final boardConfig = ref.watch(matchConfigProvider).boardConfig;
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final reduceMotionPreference = ref.watch(reducedMotionProvider);
+    final reduceMotion =
+        MediaQuery.of(context).disableAnimations || reduceMotionPreference;
 
     // Pacing-only accessibility setting; a plain field, no rebuild needed.
     ref.read(matchControllerProvider.notifier).reduceMotion = reduceMotion;
@@ -35,8 +37,43 @@ class GameBoardScreen extends ConsumerWidget {
     ref.listen<MatchUiState>(matchControllerProvider, (previous, next) {
       final justConcluded =
           next.match.isMatchOver && !(previous?.match.isMatchOver ?? false);
-      if (justConcluded) {
+      if (justConcluded && context.mounted) {
         _presentFinalMatchDialog(context, ref);
+      }
+
+      // Problem 5: Difficulty Progression Toast/Banner
+      final prevRecord = previous?.lastProgressionRecord;
+      final newRecord = next.lastProgressionRecord;
+      if (newRecord != null &&
+          newRecord != prevRecord &&
+          newRecord.hasChanged) {
+        final levelName = strings.difficultyTitle(newRecord.newDifficulty.name);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.arrow_upward_rounded, color: NeonColors.cyanX),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    strings.difficultyPromoted(levelName),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: NeonColors.surface,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: const BorderSide(color: NeonColors.cyanX),
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     });
 
@@ -57,6 +94,7 @@ class GameBoardScreen extends ConsumerWidget {
           final canLeave = await _confirmExitActiveMatch(context, ref);
           if (!context.mounted) return;
           if (canLeave) {
+            ref.read(matchControllerProvider.notifier).cancelPendingTransitions();
             Navigator.of(context).pop();
           }
         },
@@ -111,6 +149,7 @@ class GameBoardScreen extends ConsumerWidget {
                       remainingTimeO: matchState.remainingTimeO,
                       isTimerEnabled: matchState.isTimerEnabled,
                       isPaused: isPaused,
+                      isSystemThinking: ui.isSystemThinking,
                       status: roundState.status,
                     ),
                     const SizedBox(height: 10),
@@ -236,7 +275,7 @@ class GameBoardScreen extends ConsumerWidget {
                               label: strings.nextRoundNow,
                               icon: Icons.skip_next_rounded,
                               isSolid: true,
-                              color: NeonColors.purpleNeon,
+                              color: NeonColors.cyanX,
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                               onPressed: controller.nextRound,
                             ),
@@ -304,9 +343,15 @@ class GameBoardScreen extends ConsumerWidget {
   }
 
   /// Handles tapping a grid cell, routing to the controller's engine.
+  /// Taps during the system player's turn are ignored — the system moves
+  /// through its own port.
   void _handleCellTap(WidgetRef ref, Position position) {
     final controller = ref.read(matchControllerProvider.notifier);
     if (controller.isRoundOver || controller.isPaused) return;
+    if (controller.config.vsSystem &&
+        controller.currentTurnPlayer == controller.config.systemPlayer) {
+      return;
+    }
     if (!controller.snapshot.match.roundState.board.isEmpty(position)) return;
 
     try {
@@ -318,7 +363,16 @@ class GameBoardScreen extends ConsumerWidget {
 
   /// Presents the final match summary dialog.
   void _presentFinalMatchDialog(BuildContext context, WidgetRef ref) {
+    if (!context.mounted) return;
     final controller = ref.read(matchControllerProvider.notifier);
+    final progressionState =
+        ref.read(difficultyProgressionServiceProvider).state;
+    final vsSystem = controller.config.vsSystem;
+    final humanWon = vsSystem
+        ? (controller.matchWinner == controller.config.humanPlayer)
+        : null;
+    final winRate = (progressionState.winRate * 100).round();
+
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -328,6 +382,10 @@ class GameBoardScreen extends ConsumerWidget {
         scoreX: controller.scoreX,
         scoreO: controller.scoreO,
         matchWinner: controller.matchWinner,
+        moveCount: controller.snapshot.match.roundState.moveHistory.length,
+        isHumanWinner: humanWon,
+        winRatePercentage: vsSystem ? winRate : null,
+        streakWins: vsSystem ? progressionState.consecutiveWins : null,
         onRematch: () {
           Navigator.of(context).pop();
           _restartMatch(ref);
@@ -362,7 +420,7 @@ class GameBoardScreen extends ConsumerWidget {
         backgroundColor: const Color(0xFF100A24),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: NeonColors.purpleBorder, width: 1.5),
+          side: const BorderSide(color: NeonColors.borderSubtle, width: 1.5),
         ),
         title: Row(
           children: [
@@ -431,6 +489,11 @@ class GameBoardScreen extends ConsumerWidget {
       return true;
     }
 
+    final wasPaused = controller.isPaused;
+    if (!wasPaused) {
+      controller.pause(freezeResultPresentation: true);
+    }
+
     final strings = ref.read(stringsProvider);
     final shouldLeave = await showDialog<bool>(
       context: context,
@@ -438,7 +501,7 @@ class GameBoardScreen extends ConsumerWidget {
         backgroundColor: const Color(0xFF100A24),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: NeonColors.purpleBorder, width: 1.5),
+          side: const BorderSide(color: NeonColors.borderSubtle, width: 1.5),
         ),
         title: Row(
           children: [
@@ -489,6 +552,10 @@ class GameBoardScreen extends ConsumerWidget {
       ),
     );
 
+    if (shouldLeave != true && !wasPaused) {
+      controller.resume();
+    }
+
     return shouldLeave ?? false;
   }
 
@@ -496,6 +563,7 @@ class GameBoardScreen extends ConsumerWidget {
     final canLeave = await _confirmExitActiveMatch(context, ref);
     if (!context.mounted) return;
     if (canLeave) {
+      ref.read(matchControllerProvider.notifier).cancelPendingTransitions();
       Navigator.of(context).pop();
     }
   }

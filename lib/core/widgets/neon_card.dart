@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/neon_colors.dart';
 
-/// Card container with subtle glassmorphic styling and optional neon border glow.
+/// Card container with unified surface colour and optional neon border glow.
+/// Background uses the proper solid surface token — not opacity-based glass.
 class NeonCard extends StatelessWidget {
   final Widget child;
   final Color borderColor;
@@ -23,14 +24,14 @@ class NeonCard extends StatelessWidget {
     final cardContent = Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: NeonColors.surfaceGlass,
-        borderRadius: BorderRadius.circular(18),
+        color: NeonColors.surface,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: borderColor,
-          width: hasGlow ? 1.6 : 1.0,
+          width: hasGlow ? 1.5 : 1.0,
         ),
         boxShadow: hasGlow
-            ? NeonColors.glow(color: borderColor, blur: 10, spread: 0.5)
+            ? NeonColors.glow(color: borderColor, blur: 8, spread: 0)
             : null,
       ),
       child: child,
@@ -39,8 +40,8 @@ class NeonCard extends StatelessWidget {
     if (onTap != null) {
       return InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        splashColor: borderColor.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(16),
+        splashColor: borderColor.withValues(alpha: 0.15),
         highlightColor: Colors.transparent,
         child: cardContent,
       );
@@ -49,4 +50,3 @@ class NeonCard extends StatelessWidget {
     return cardContent;
   }
 }
-

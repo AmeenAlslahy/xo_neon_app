@@ -21,6 +21,7 @@ class PlayerTurnHeader extends ConsumerWidget {
   final Duration? remainingTimeO;
   final bool isTimerEnabled;
   final bool isPaused;
+  final bool isSystemThinking;
 
   const PlayerTurnHeader({
     super.key,
@@ -35,6 +36,7 @@ class PlayerTurnHeader extends ConsumerWidget {
     this.remainingTimeO,
     this.isTimerEnabled = false,
     this.isPaused = false,
+    this.isSystemThinking = false,
   });
 
   @override
@@ -103,10 +105,10 @@ class PlayerTurnHeader extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     margin: const EdgeInsets.only(bottom: 4),
                     decoration: BoxDecoration(
-                      color: NeonColors.purpleNeon.withValues(alpha: 0.16),
+                      color: NeonColors.surfaceElevated,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: NeonColors.purpleBorder.withValues(alpha: 0.5),
+                        color: NeonColors.borderSubtle,
                         width: 1.0,
                       ),
                     ),
@@ -135,10 +137,9 @@ class PlayerTurnHeader extends ConsumerWidget {
                       color: statusColor,
                       width: 1.5,
                     ),
-                    boxShadow: NeonColors.glow(
-                      color: statusColor,
-                      blur: 10,
-                    ),
+                    boxShadow: (!isGameOver && !isPaused)
+                        ? NeonColors.glow(color: statusColor, blur: 8)
+                        : null,
                   ),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
@@ -156,7 +157,7 @@ class PlayerTurnHeader extends ConsumerWidget {
                           Text(
                             strings.matchPaused,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: NeonColors.textPrimary,
                               fontSize: 12,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.3,
@@ -172,7 +173,7 @@ class PlayerTurnHeader extends ConsumerWidget {
                           Text(
                             strings.timeoutMessage(winner!.other.symbol),
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: NeonColors.textPrimary,
                               fontSize: 12,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.3,
@@ -188,7 +189,7 @@ class PlayerTurnHeader extends ConsumerWidget {
                           Text(
                             strings.winnerWon(winner!.symbol),
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: NeonColors.textPrimary,
                               fontSize: 13,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.3,
@@ -204,7 +205,7 @@ class PlayerTurnHeader extends ConsumerWidget {
                           Text(
                             strings.drawStatus,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: NeonColors.textPrimary,
                               fontSize: 13,
                               fontWeight: FontWeight.w900,
                               letterSpacing: 0.3,
@@ -228,6 +229,24 @@ class PlayerTurnHeader extends ConsumerWidget {
                               fontWeight: FontWeight.w900,
                             ),
                           ),
+                          if (isSystemThinking) ...[
+                            const SizedBox(width: 6),
+                            const Icon(
+                              Icons.auto_awesome,
+                              size: 13,
+                              color: NeonColors.amberGold,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              strings.systemThinking,
+                              style: const TextStyle(
+                                color: NeonColors.amberGold,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
                         ],
                       ],
                     ),
@@ -239,10 +258,10 @@ class PlayerTurnHeader extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: NeonColors.surfaceGlass,
+                    color: NeonColors.surfaceElevated,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: NeonColors.purpleBorder.withValues(alpha: 0.4),
+                      color: NeonColors.borderSubtle,
                       width: 1.0,
                     ),
                   ),
@@ -254,7 +273,7 @@ class PlayerTurnHeader extends ConsumerWidget {
                         const Icon(
                           Icons.grid_view_rounded,
                           size: 11,
-                          color: NeonColors.purpleNeon,
+                          color: NeonColors.textSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(

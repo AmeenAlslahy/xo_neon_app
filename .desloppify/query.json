@@ -1,0 +1,443 @@
+{
+  "command": "show",
+  "query": "test_coverage",
+  "status_filter": "open",
+  "total": 10,
+  "summary": {
+    "by_tier": {
+      "T3": 10
+    },
+    "by_detector": {
+      "test_coverage": 10
+    },
+    "files": 10
+  },
+  "by_file": {
+    "lib/app/theme/neon_colors.dart": [
+      {
+        "id": "test_coverage::lib/app/theme/neon_colors.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (78 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 78,
+          "importer_count": 0,
+          "loc_weight": 8.831760866327848
+        }
+      }
+    ],
+    "lib/app/theme/neon_theme.dart": [
+      {
+        "id": "test_coverage::lib/app/theme/neon_theme.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (48 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 48,
+          "importer_count": 0,
+          "loc_weight": 6.928203230275509
+        }
+      }
+    ],
+    "lib/core/l10n/app_strings.dart": [
+      {
+        "id": "test_coverage::lib/core/l10n/app_strings.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (164 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 164,
+          "importer_count": 0,
+          "loc_weight": 12.806248474865697
+        }
+      }
+    ],
+    "lib/core/l10n/locale_providers.dart": [
+      {
+        "id": "test_coverage::lib/core/l10n/locale_providers.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (26 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 26,
+          "importer_count": 0,
+          "loc_weight": 5.0990195135927845
+        }
+      }
+    ],
+    "lib/core/widgets/neon_button.dart": [
+      {
+        "id": "test_coverage::lib/core/widgets/neon_button.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (129 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 129,
+          "importer_count": 0,
+          "loc_weight": 11.357816691600547
+        }
+      }
+    ],
+    "lib/core/widgets/neon_card.dart": [
+      {
+        "id": "test_coverage::lib/core/widgets/neon_card.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (52 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 52,
+          "importer_count": 0,
+          "loc_weight": 7.211102550927978
+        }
+      }
+    ],
+    "lib/features/game/application/match_providers.dart": [
+      {
+        "id": "test_coverage::lib/features/game/application/match_providers.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (35 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 35,
+          "importer_count": 0,
+          "loc_weight": 5.916079783099616
+        }
+      }
+    ],
+    "lib/features/game/domain/exceptions/game_exceptions.dart": [
+      {
+        "id": "test_coverage::lib/features/game/domain/exceptions/game_exceptions.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (58 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 58,
+          "importer_count": 0,
+          "loc_weight": 7.615773105863909
+        }
+      }
+    ],
+    "lib/features/game/domain/models/cell_position.dart": [
+      {
+        "id": "test_coverage::lib/features/game/domain/models/cell_position.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (22 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 22,
+          "importer_count": 0,
+          "loc_weight": 4.69041575982343
+        }
+      }
+    ],
+    "lib/features/game/domain/models/game_state.dart": [
+      {
+        "id": "test_coverage::lib/features/game/domain/models/game_state.dart::untested_module",
+        "tier": 3,
+        "confidence": "high",
+        "summary": "Untested module (69 LOC, 0 importers)",
+        "detail": {
+          "kind": "untested_module",
+          "loc": 69,
+          "importer_count": 0,
+          "loc_weight": 8.306623862918075
+        }
+      }
+    ]
+  },
+  "total_matching": 26,
+  "hidden": {
+    "by_detector": {
+      "test_coverage": 16
+    },
+    "total": 16
+  },
+  "noise_budget": 10,
+  "noise_global_budget": 0,
+  "narrative": {
+    "phase": "first_scan",
+    "headline": "First scan complete. 262 open issues across 3 dimensions.",
+    "dimensions": {
+      "lowest_dimensions": [
+        {
+          "name": "Abstraction fit",
+          "strict": 0.0,
+          "failing": 0,
+          "impact": 0.0,
+          "subjective": true,
+          "impact_description": "re-review to improve"
+        },
+        {
+          "name": "AI generated debt",
+          "strict": 0.0,
+          "failing": 0,
+          "impact": 0.0,
+          "subjective": true,
+          "impact_description": "re-review to improve"
+        },
+        {
+          "name": "API coherence",
+          "strict": 0.0,
+          "failing": 0,
+          "impact": 0.0,
+          "subjective": true,
+          "impact_description": "re-review to improve"
+        }
+      ],
+      "biggest_gap_dimensions": [],
+      "stagnant_dimensions": []
+    },
+    "actions": [
+      {
+        "type": "reorganize",
+        "detector": "orphaned",
+        "count": 4,
+        "description": "4 orphaned issues \u2014 delete dead files or relocate with `desloppify move`",
+        "command": "desloppify show orphaned --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 1,
+        "lane": "restructure"
+      },
+      {
+        "type": "refactor",
+        "detector": "structural",
+        "count": 6,
+        "description": "6 structural work items \u2014 review large files \u2014 split only when responsibilities are clearly separable",
+        "command": "desloppify show structural --status open",
+        "impact": 0.0,
+        "dimension": "File health",
+        "priority": 2,
+        "lane": "refactor_0"
+      },
+      {
+        "type": "refactor",
+        "detector": "dupes",
+        "count": 3,
+        "description": "3 dupes work items \u2014 extract shared utility or consolidate duplicates",
+        "command": "desloppify show dupes --status open",
+        "impact": 0.0,
+        "dimension": "Duplication",
+        "priority": 3,
+        "lane": "refactor_0"
+      },
+      {
+        "type": "refactor",
+        "detector": "test_coverage",
+        "count": 26,
+        "description": "26 test_coverage work items \u2014 review test coverage gaps \u2014 focus on critical modules with many importers first; defer test writing until code quality issues are resolved",
+        "command": "desloppify show test_coverage --status open",
+        "impact": 0.0,
+        "dimension": "Test health",
+        "priority": 4,
+        "lane": "test_coverage"
+      },
+      {
+        "type": "refactor",
+        "detector": "signature",
+        "count": 6,
+        "description": "6 signature work items \u2014 consolidate inconsistent function signatures",
+        "command": "desloppify show signature --status open",
+        "impact": 0.0,
+        "dimension": "Unknown",
+        "priority": 5,
+        "lane": "refactor_0"
+      },
+      {
+        "type": "refactor",
+        "detector": "boilerplate_duplication",
+        "count": 1,
+        "description": "1 boilerplate_duplication work items \u2014 extract shared boilerplate into reusable helpers or base classes",
+        "command": "desloppify show boilerplate_duplication --status open",
+        "impact": 0.0,
+        "dimension": "Duplication",
+        "priority": 6,
+        "lane": "refactor_0"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "unused",
+        "count": 195,
+        "description": "195 unused issues \u2014 inspect with `desloppify next` and fix manually",
+        "command": "desloppify show unused --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 7,
+        "lane": "refactor_0"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "smells",
+        "count": 1,
+        "description": "1 smells issues \u2014 inspect with `desloppify next` and fix manually",
+        "command": "desloppify show smells --status open",
+        "impact": 0.0,
+        "dimension": "Code quality",
+        "priority": 8,
+        "lane": "refactor_0"
+      },
+      {
+        "type": "manual_fix",
+        "detector": "subjective_review",
+        "count": 20,
+        "description": "20 assessment requests need review \u2014 run holistic review to refresh subjective scores",
+        "command": "desloppify review --prepare",
+        "impact": 0.0,
+        "dimension": "Unknown",
+        "priority": 9,
+        "lane": "refactor_1"
+      }
+    ],
+    "strategy": {
+      "fixer_leverage": {
+        "auto_fixable_count": 0,
+        "total_count": 282,
+        "coverage": 0.0,
+        "impact_ratio": 0.0,
+        "recommendation": "none"
+      },
+      "lanes": {
+        "restructure": {
+          "actions": [
+            1
+          ],
+          "file_count": 4,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        },
+        "refactor_0": {
+          "actions": [
+            2,
+            3,
+            5,
+            6,
+            7,
+            8
+          ],
+          "file_count": 42,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        },
+        "refactor_1": {
+          "actions": [
+            9
+          ],
+          "file_count": 1,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        },
+        "test_coverage": {
+          "actions": [
+            4
+          ],
+          "file_count": 26,
+          "total_impact": 0.0,
+          "automation": "manual",
+          "run_first": false
+        }
+      },
+      "can_parallelize": true,
+      "hint": "4 independent workstreams, safe to parallelize. Rescan after each phase to verify."
+    },
+    "tools": {
+      "fixers": [],
+      "move": {
+        "available": true,
+        "relevant": true,
+        "reason": "4 orphaned files",
+        "usage": "desloppify move <source> <dest> [--dry-run]"
+      },
+      "plan": {
+        "command": "desloppify plan",
+        "description": "Generate prioritized markdown cleanup plan"
+      },
+      "badge": {
+        "generated": false,
+        "in_readme": false,
+        "path": "scorecard.png",
+        "recommendation": null
+      }
+    },
+    "debt": {
+      "overall_gap": 0.0,
+      "wontfix_count": 0,
+      "worst_dimension": null,
+      "worst_gap": 0.0,
+      "trend": "stable"
+    },
+    "milestone": null,
+    "primary_action": {
+      "command": "desloppify show orphaned --status open",
+      "description": "4 orphaned issues \u2014 delete dead files or relocate with `desloppify move`"
+    },
+    "why_now": "4 independent workstreams, safe to parallelize. Rescan after each phase to verify.",
+    "verification_step": {
+      "command": "desloppify scan",
+      "reason": "revalidate after changes"
+    },
+    "risk_flags": [],
+    "strict_target": {
+      "target": 85.0,
+      "current": 19.1,
+      "gap": 65.9,
+      "state": "below",
+      "warning": null
+    },
+    "reminders": [
+      {
+        "type": "zone_classification",
+        "message": "11 of 47 files classified as non-production (11 test). Override with `desloppify zone set <file> production` if any are misclassified.",
+        "command": "desloppify zone show",
+        "priority": 2,
+        "severity": "medium"
+      }
+    ],
+    "reminder_history": {
+      "zone_classification": 2,
+      "report_scores": 1
+    }
+  },
+  "config": {
+    "target_strict_score": 85,
+    "review_max_age_days": 30,
+    "review_batch_max_files": 80,
+    "holistic_max_age_days": 30,
+    "generate_scorecard": true,
+    "badge_path": "scorecard.png",
+    "exclude": [],
+    "ignore": [],
+    "ignore_metadata": {},
+    "zone_overrides": {},
+    "review_dimensions": [],
+    "large_files_threshold": 0,
+    "props_threshold": 0,
+    "issue_noise_budget": 10,
+    "issue_noise_global_budget": 0,
+    "execution_log_max_entries": 10000,
+    "needs_rescan": false,
+    "languages": {},
+    "commit_tracking_enabled": true,
+    "commit_pr": 0,
+    "commit_default_branch": "",
+    "commit_message_template": "desloppify: {status} {count} issue(s) \u2014 {summary}",
+    "trust_plugins": false,
+    "transition_messages": {},
+    "hermes_enabled": false,
+    "hermes_models": {
+      "execute": "openrouter:x-ai/grok-4.20-beta",
+      "review": "openrouter:google/gemini-3.1-pro-preview"
+    }
+  }
+}

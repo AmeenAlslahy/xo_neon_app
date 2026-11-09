@@ -8,7 +8,8 @@ import 'neon_o_widget.dart';
 import 'neon_x_widget.dart';
 
 /// Modal dialog presented when a round or an entire match concludes,
-/// supporting both intermediate round results and overall match victory/draw summaries.
+/// supporting intermediate round results, overall match victory/draw summaries,
+/// moderated celebration glow, statistics, and motivational feedback.
 class GameOverDialog extends ConsumerWidget {
   final GameStatus status;
   final VoidCallback onRematch;
@@ -18,6 +19,11 @@ class GameOverDialog extends ConsumerWidget {
   final int scoreX;
   final int scoreO;
   final Player? matchWinner;
+  final int? moveCount;
+  final bool? isHumanWinner;
+  final int? winRatePercentage;
+  final int? streakWins;
+  final String? difficultyTitle;
 
   const GameOverDialog({
     super.key,
@@ -29,6 +35,11 @@ class GameOverDialog extends ConsumerWidget {
     this.scoreX = 0,
     this.scoreO = 0,
     this.matchWinner,
+    this.moveCount,
+    this.isHumanWinner,
+    this.winRatePercentage,
+    this.streakWins,
+    this.difficultyTitle,
   });
 
   @override
@@ -46,44 +57,65 @@ class GameOverDialog extends ConsumerWidget {
 
     final isTimeout = !isFinalMatchResult && status is GameTimeout;
 
+    // Preserves distinct X (Cyan), O (Coral), or Draw (Gold) identity
     final themeColor = isWon
         ? (winner == Player.x ? NeonColors.cyanX : NeonColors.orangeO)
         : NeonColors.amberGold;
 
+    final isCelebration = isWon && (isHumanWinner != false);
+
     return Dialog(
-      backgroundColor: const Color(0xFF100A24),
+      backgroundColor: NeonColors.surface,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: themeColor, width: 2.2),
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: themeColor, width: 2.0),
       ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
         decoration: BoxDecoration(
-          color: const Color(0xFF100A24),
-          borderRadius: BorderRadius.circular(24),
+          color: NeonColors.surface,
+          borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-              color: themeColor.withValues(alpha: 0.35),
-              blurRadius: 28,
-              spreadRadius: 1,
+              color: themeColor.withValues(alpha: isCelebration ? 0.35 : 0.2),
+              blurRadius: isCelebration ? 16 : 10,
+              spreadRadius: 0,
             ),
           ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Header Glyphs & Iconography
+            // Header Glyphs & Iconography with Celebration Glow
             if (isFinalMatchResult) ...[
               if (isWon) ...[
-                winner == Player.x
-                    ? const NeonXWidget(size: 56, isWinning: true)
-                    : const NeonOWidget(size: 56, isWinning: true),
+                if (isCelebration)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: themeColor.withValues(alpha: 0.3),
+                          blurRadius: 14,
+                          spreadRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: winner == Player.x
+                        ? const NeonXWidget(size: 60, isWinning: true)
+                        : const NeonOWidget(size: 60, isWinning: true),
+                  )
+                else
+                  winner == Player.x
+                      ? const NeonXWidget(size: 56, isWinning: true)
+                      : const NeonOWidget(size: 56, isWinning: true),
                 const SizedBox(height: 12),
                 Text(
                   strings.finalMatchTitle,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: NeonColors.textPrimary,
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.5,
@@ -91,11 +123,13 @@ class GameOverDialog extends ConsumerWidget {
                 ),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: themeColor.withValues(alpha: 0.18),
+                    color: themeColor.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: themeColor.withValues(alpha: 0.6)),
+                    border:
+                        Border.all(color: themeColor.withValues(alpha: 0.6)),
                   ),
                   child: Text(
                     strings.matchWinnerIs(
@@ -111,6 +145,18 @@ class GameOverDialog extends ConsumerWidget {
                     ),
                   ),
                 ),
+                if (isHumanWinner == false) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    strings.defeatEncouragement,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: NeonColors.amberGold,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ] else ...[
                 const Icon(
                   Icons.emoji_events_outlined,
@@ -121,18 +167,20 @@ class GameOverDialog extends ConsumerWidget {
                 Text(
                   strings.finalMatchTitle,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: NeonColors.textPrimary,
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: NeonColors.amberGold.withValues(alpha: 0.18),
+                    color: NeonColors.amberGold.withValues(alpha: 0.16),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: NeonColors.amberGold.withValues(alpha: 0.6)),
+                    border: Border.all(
+                        color: NeonColors.amberGold.withValues(alpha: 0.6)),
                   ),
                   child: Text(
                     strings.matchDrawResult(scoreX),
@@ -155,16 +203,17 @@ class GameOverDialog extends ConsumerWidget {
               Text(
                 strings.timeoutLabel,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: NeonColors.textPrimary,
                   fontSize: 22,
                   fontWeight: FontWeight.w900,
                 ),
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 decoration: BoxDecoration(
-                  color: themeColor.withValues(alpha: 0.18),
+                  color: themeColor.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: themeColor.withValues(alpha: 0.5)),
                 ),
@@ -185,7 +234,7 @@ class GameOverDialog extends ConsumerWidget {
               Text(
                 strings.victoryTitle,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: NeonColors.textPrimary,
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.8,
@@ -193,9 +242,10 @@ class GameOverDialog extends ConsumerWidget {
               ),
               const SizedBox(height: 6),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                 decoration: BoxDecoration(
-                  color: themeColor.withValues(alpha: 0.18),
+                  color: themeColor.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: themeColor.withValues(alpha: 0.5)),
                 ),
@@ -218,7 +268,7 @@ class GameOverDialog extends ConsumerWidget {
               Text(
                 strings.drawTitle,
                 style: const TextStyle(
-                  color: Colors.white,
+                  color: NeonColors.textPrimary,
                   fontSize: 24,
                   fontWeight: FontWeight.w900,
                   letterSpacing: 0.8,
@@ -234,17 +284,91 @@ class GameOverDialog extends ConsumerWidget {
                 ),
               ),
             ],
-            const SizedBox(height: 24),
 
-            // Primary Action: Rematch with Solid High-Contrast Styling
+            // Match Statistics Badge (Moves, Win Rate, Streak)
+            if (moveCount != null ||
+                winRatePercentage != null ||
+                streakWins != null) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: NeonColors.surfaceElevated,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: NeonColors.borderSubtle),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    if (moveCount != null)
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.touch_app_outlined,
+                              size: 16, color: NeonColors.cyanX),
+                          const SizedBox(height: 2),
+                          Text(
+                            strings.movesCount(moveCount!),
+                            style: const TextStyle(
+                              color: NeonColors.textPrimary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    if (winRatePercentage != null)
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.analytics_outlined,
+                              size: 16, color: NeonColors.amberGold),
+                          const SizedBox(height: 2),
+                          Text(
+                            strings.winRateLabel(winRatePercentage!),
+                            style: const TextStyle(
+                              color: NeonColors.textPrimary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    if (streakWins != null && streakWins! > 0)
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.local_fire_department_rounded,
+                              size: 16, color: NeonColors.orangeO),
+                          const SizedBox(height: 2),
+                          Text(
+                            strings.streakWins(streakWins!),
+                            style: const TextStyle(
+                              color: NeonColors.textPrimary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 20),
+
+            // Primary Action: Rematch with Solid Cyan High-Contrast Styling
             SizedBox(
               width: double.infinity,
               child: NeonButton(
                 label: strings.playAgain,
                 icon: Icons.replay_rounded,
                 isSolid: true,
-                color: themeColor,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                color: NeonColors.cyanX,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                 onPressed: onRematch,
               ),
             ),
@@ -259,7 +383,8 @@ class GameOverDialog extends ConsumerWidget {
                       label: strings.viewBoard,
                       icon: Icons.visibility_outlined,
                       isSecondary: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 11),
                       onPressed: onViewBoard,
                     ),
                   ),
@@ -270,7 +395,8 @@ class GameOverDialog extends ConsumerWidget {
                     label: strings.exitToHome,
                     icon: Icons.home_outlined,
                     isSecondary: true,
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 11),
                     onPressed: onExit,
                   ),
                 ),

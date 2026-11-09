@@ -2,6 +2,7 @@
 library;
 
 export 'exceptions/game_exceptions.dart';
+export 'ai/system_move_selector.dart';
 export 'logic/game_board.dart';
 export 'logic/game_engine.dart';
 export 'logic/match_engine.dart';

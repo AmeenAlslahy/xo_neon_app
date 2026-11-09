@@ -24,11 +24,16 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
   int _selectedRounds = 3; // 1, 3 (default), 5
   TimerPreset _selectedTimerPreset = TimerPreset.none; // none (default)
   int _customTimerSeconds = 120; // 2 minutes default for custom
+  bool _vsSystem = false; // false = local two players (default)
+  Player _humanPlayer = Player.x; // the system plays the other mark
+  SystemDifficulty _systemDifficulty = SystemDifficulty.medium;
 
   @override
   void initState() {
     super.initState();
     _selectedConfig = BoardConfig.grid3x3;
+    final progression = ref.read(difficultyProgressionServiceProvider);
+    _systemDifficulty = progression.state.currentDifficulty;
   }
 
   @override
@@ -49,6 +54,148 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                // Section 0: Game Mode (local two players vs the system)
+                Text(
+                  strings.chooseMode,
+                  style: const TextStyle(
+                    color: NeonColors.textPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _buildChoiceBox(
+                      selected: !_vsSystem,
+                      label: strings.modeLocalShort,
+                      icon: Icons.group_rounded,
+                      onTap: () => setState(() => _vsSystem = false),
+                    ),
+                    _buildChoiceBox(
+                      selected: _vsSystem,
+                      label: strings.modeSystem,
+                      icon: Icons.smart_toy_rounded,
+                      onTap: () => setState(() => _vsSystem = true),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+
+                // System-only options (hidden for local play)
+                if (_vsSystem) ...[
+                  Text(
+                    strings.systemLevelTitle,
+                    style: const TextStyle(
+                      color: NeonColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _buildChoiceBox(
+                        selected: _systemDifficulty == SystemDifficulty.easy,
+                        label: strings.difficultyEasy,
+                        icon: Icons.sentiment_satisfied_rounded,
+                        onTap: () {
+                          setState(
+                              () => _systemDifficulty = SystemDifficulty.easy);
+                          ref
+                              .read(difficultyProgressionServiceProvider)
+                              .setDifficulty(SystemDifficulty.easy);
+                        },
+                      ),
+                      _buildChoiceBox(
+                        selected: _systemDifficulty == SystemDifficulty.medium,
+                        label: strings.difficultyMedium,
+                        icon: Icons.sentiment_neutral_rounded,
+                        onTap: () {
+                          setState(
+                              () => _systemDifficulty = SystemDifficulty.medium);
+                          ref
+                              .read(difficultyProgressionServiceProvider)
+                              .setDifficulty(SystemDifficulty.medium);
+                        },
+                      ),
+                      _buildChoiceBox(
+                        selected: _systemDifficulty == SystemDifficulty.hard,
+                        label: strings.difficultyHard,
+                        icon: Icons.sentiment_very_dissatisfied_rounded,
+                        onTap: () {
+                          setState(
+                              () => _systemDifficulty = SystemDifficulty.hard);
+                          ref
+                              .read(difficultyProgressionServiceProvider)
+                              .setDifficulty(SystemDifficulty.hard);
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          strings.autoProgression,
+                          style: const TextStyle(
+                            color: NeonColors.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Switch(
+                          value: ref
+                              .watch(difficultyProgressionServiceProvider)
+                              .state
+                              .isAutoProgressionEnabled,
+                          activeThumbColor: NeonColors.cyanX,
+                          onChanged: (val) {
+                            ref
+                                .read(difficultyProgressionServiceProvider)
+                                .setAutoProgressionEnabled(val);
+                            setState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    strings.chooseYourMark,
+                    style: const TextStyle(
+                      color: NeonColors.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      _buildChoiceBox(
+                        selected: _humanPlayer == Player.x,
+                        label: strings.playAsX,
+                        icon: Icons.close,
+                        iconColor: NeonColors.cyanX,
+                        onTap: () =>
+                            setState(() => _humanPlayer = Player.x),
+                      ),
+                      _buildChoiceBox(
+                        selected: _humanPlayer == Player.o,
+                        label: strings.playAsO,
+                        icon: Icons.radio_button_unchecked,
+                        iconColor: NeonColors.orangeO,
+                        onTap: () =>
+                            setState(() => _humanPlayer = Player.o),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                ],
+
                 // Section 1: Choose Grid Size
                 Text(
                   strings.chooseGrid,
@@ -157,27 +304,41 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? NeonColors.purpleNeon.withValues(alpha: 0.22)
-                                  : NeonColors.surfaceGlass,
+                                  ? NeonColors.cyanX.withValues(alpha: 0.14)
+                                  : NeonColors.surfaceElevated,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: isSelected ? NeonColors.purpleNeon : NeonColors.borderSubtle,
+                                color: isSelected ? NeonColors.cyanX : NeonColors.borderSubtle,
                                 width: isSelected ? 1.8 : 1.0,
                               ),
                               boxShadow: isSelected
-                                  ? NeonColors.glow(color: NeonColors.purpleNeon, blur: 8)
+                                  ? NeonColors.glow(color: NeonColors.cyanX, blur: 8)
                                   : null,
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  AppStrings.toArabicDigits(count),
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.white : NeonColors.textSecondary,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
-                                  ),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      AppStrings.toArabicDigits(count),
+                                      style: TextStyle(
+                                        color: isSelected ? NeonColors.textPrimary : NeonColors.textSecondary,
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                    if (isSelected) ...[
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.check_circle_rounded,
+                                        size: 14,
+                                        color: NeonColors.cyanX,
+                                      ),
+                                    ],
+                                  ],
                                 ),
                                 const SizedBox(height: 2),
                                 FittedBox(
@@ -186,8 +347,8 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
                                     label,
                                     style: TextStyle(
                                       color: isSelected
-                                          ? NeonColors.purpleBorder
-                                          : NeonColors.textMuted,
+                                          ? NeonColors.cyanX
+                                          : NeonColors.textSecondary,
                                       fontSize: 11,
                                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                     ),
@@ -224,7 +385,7 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
                           border: Border.all(color: NeonColors.cyanX.withValues(alpha: 0.5)),
                         ),
                         child: Text(
-                          'ساعة شطرنج',
+                          strings.chessClockBadge,
                           style: const TextStyle(
                             color: NeonColors.cyanX,
                             fontSize: 10,
@@ -275,7 +436,7 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: NeonColors.surfaceGlass,
+                      color: NeonColors.surfaceElevated,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: NeonColors.cyanX.withValues(alpha: 0.4)),
                     ),
@@ -345,6 +506,9 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
                       boardConfig: _selectedConfig,
                       totalRounds: _selectedRounds,
                       timerConfig: timerConfig,
+                      vsSystem: _vsSystem,
+                      humanPlayer: _humanPlayer,
+                      systemDifficulty: _systemDifficulty,
                     );
 
                     // Publish the configuration for the board screen, then navigate.
@@ -355,6 +519,79 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
                       ),
                     );
                   },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Reusable neon choice box (mode / system level / player mark rows).
+  Widget _buildChoiceBox({
+    required bool selected,
+    required String label,
+    required IconData icon,
+    Color? iconColor,
+    required VoidCallback onTap,
+  }) {
+    const selectionColor = NeonColors.cyanX;
+
+    return Expanded(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            decoration: BoxDecoration(
+              color: selected
+                  ? selectionColor.withValues(alpha: 0.16)
+                  : NeonColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected ? selectionColor : NeonColors.borderSubtle,
+                width: selected ? 1.8 : 1.0,
+              ),
+              boxShadow: selected
+                  ? NeonColors.glow(color: selectionColor, blur: 8)
+                  : null,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 16,
+                      color: iconColor ?? (selected ? selectionColor : NeonColors.textSecondary),
+                    ),
+                    if (selected) ...[
+                      const SizedBox(width: 4),
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 13,
+                        color: NeonColors.cyanX,
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: selected ? NeonColors.textPrimary : NeonColors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -378,12 +615,12 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? NeonColors.cyanX.withValues(alpha: 0.18)
-              : NeonColors.surfaceGlass,
+              ? NeonColors.cyanX.withValues(alpha: 0.16)
+              : NeonColors.surfaceElevated,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isSelected ? NeonColors.cyanX : NeonColors.borderSubtle,
-            width: isSelected ? 1.6 : 1.0,
+            width: isSelected ? 1.8 : 1.0,
           ),
           boxShadow: isSelected
               ? NeonColors.glow(color: NeonColors.cyanX, blur: 8)
@@ -392,16 +629,25 @@ class _GameSetupScreenState extends ConsumerState<GameSetupScreen> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 15,
-              color: isSelected ? NeonColors.cyanX : NeonColors.textSecondary,
-            ),
-            const SizedBox(width: 6),
+            if (isSelected) ...[
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 14,
+                color: NeonColors.cyanX,
+              ),
+              const SizedBox(width: 6),
+            ] else ...[
+              Icon(
+                icon,
+                size: 15,
+                color: NeonColors.textSecondary,
+              ),
+              const SizedBox(width: 6),
+            ],
             Text(
               title,
               style: TextStyle(
-                color: isSelected ? Colors.white : NeonColors.textSecondary,
+                color: isSelected ? NeonColors.cyanX : NeonColors.textSecondary,
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),

@@ -14,6 +14,17 @@ import 'package:xo_neon_app/features/game/presentation/widgets/game_grid_widget.
 import 'package:xo_neon_app/features/game/presentation/widgets/game_over_dialog.dart';
 import 'package:xo_neon_app/features/game/presentation/widgets/player_turn_header.dart';
 import 'package:xo_neon_app/features/game/presentation/widgets/round_end_banner.dart';
+import 'package:xo_neon_app/core/widgets/neon_button.dart';
+import 'package:xo_neon_app/features/online/application/online_match_service.dart';
+import 'package:xo_neon_app/features/online/application/room_service.dart';
+import 'package:xo_neon_app/features/online/domain/models/online_game_state.dart';
+import 'package:xo_neon_app/features/online/domain/models/room_config.dart';
+import 'package:xo_neon_app/features/online/domain/models/room_model.dart';
+import 'package:xo_neon_app/features/online/presentation/screens/online_game_board_screen.dart';
+import 'package:xo_neon_app/features/online/presentation/screens/room_lobby_screen.dart';
+import 'package:xo_neon_app/features/online/presentation/screens/online_lobby_entry_screen.dart';
+import 'package:xo_neon_app/features/online/presentation/screens/create_room_screen.dart';
+import 'package:xo_neon_app/features/online/presentation/screens/join_room_screen.dart';
 
 void main() {
   setUpAll(() {
@@ -28,6 +39,7 @@ void main() {
     required Widget child,
     required String filename,
     Size surfaceSize = const Size(390, 844),
+    List<dynamic> overrides = const [],
     Future<void> Function(WidgetTester tester)? beforeCapture,
   }) async {
     final repaintKey = GlobalKey();
@@ -37,6 +49,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
+        overrides: overrides.cast(),
         child: MaterialApp(
           theme: NeonTheme.darkTheme,
           locale: const Locale('ar'),
@@ -63,11 +76,12 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     if (beforeCapture != null) {
       await beforeCapture(tester);
-      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 300));
     }
 
     await tester.runAsync(() async {
@@ -613,6 +627,152 @@ void main() {
         ),
       ),
       filename: '10_paused_match_screen.png',
+    );
+  });
+
+  testWidgets('Capture Screen 11: Room Lobby Screen (Waiting for Player)', (tester) async {
+    final room = RoomModel(
+      code: 'X9K2B4',
+      hostUid: 'host_1',
+      hostName: 'CyberHost',
+      config: RoomConfig.standard3x3(),
+      createdAtMs: 100,
+      lastActiveMs: 100,
+    );
+
+    await captureWidget(
+      tester: tester,
+      overrides: [
+        roomStreamProvider(room.code).overrideWith((ref) => Stream.value(room)),
+      ],
+      child: RoomLobbyScreen(
+        roomCode: room.code,
+        isHost: true,
+      ),
+      filename: '11_room_lobby_screen.png',
+    );
+  });
+
+  testWidgets('Capture Screen 12: Online Game Board Screen (Active Play)', (tester) async {
+    final room = RoomModel(
+      code: 'X9K2B4',
+      hostUid: 'host_1',
+      hostName: 'CyberHost',
+      guestUid: 'guest_2',
+      guestName: 'NeonGuest',
+      config: RoomConfig.standard3x3(),
+      createdAtMs: 100,
+      lastActiveMs: 100,
+    );
+
+    final initialGame = OnlineGameState(
+      currentRound: 1,
+      currentTurn: Player.x,
+      hostScore: 1,
+      guestScore: 0,
+      moves: const [
+        OnlineMove(row: 1, col: 1, player: Player.x, timestampMs: 100),
+        OnlineMove(row: 0, col: 0, player: Player.o, timestampMs: 200),
+      ],
+      status: OnlineGameStatus.playing,
+      lastUpdatedMs: 100,
+    );
+
+    await captureWidget(
+      tester: tester,
+      overrides: [
+        onlineGameStreamProvider(room.code).overrideWith((ref) => Stream.value(initialGame)),
+      ],
+      child: OnlineGameBoardScreen(
+        room: room,
+        isHost: true,
+      ),
+      filename: '12_online_game_board_screen.png',
+    );
+  });
+
+  testWidgets('Capture Screen 13: Exit Confirmation Dialog', (tester) async {
+    await captureWidget(
+      tester: tester,
+      child: Scaffold(
+        backgroundColor: Colors.black.withValues(alpha: 0.65),
+        body: Center(
+          child: AlertDialog(
+            backgroundColor: NeonColors.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: const BorderSide(color: NeonColors.borderSubtle, width: 1.5),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: NeonColors.dangerRed, size: 24),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'مغادرة المباراة',
+                    style: TextStyle(
+                      color: NeonColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: const Text(
+              'هل أنت متأكد من مغادرة المباراة الحالية؟ سيتم إلغاء التقدم.',
+              style: TextStyle(
+                color: NeonColors.textSecondary,
+                fontSize: 14,
+                height: 1.4,
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {},
+                child: const Text(
+                  'إلغاء',
+                  style: TextStyle(
+                    color: NeonColors.textSecondary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              NeonButton(
+                label: 'تأكيد الخروج',
+                isDanger: true,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                onPressed: () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+      filename: '13_exit_confirmation_dialog.png',
+    );
+  });
+
+  testWidgets('Capture Screen 14: Online Lobby Entry Screen', (tester) async {
+    await captureWidget(
+      tester: tester,
+      child: const OnlineLobbyEntryScreen(),
+      filename: '14_online_lobby_entry_screen.png',
+    );
+  });
+
+  testWidgets('Capture Screen 15: Create Room Screen with Board Size & Rounds Chips', (tester) async {
+    await captureWidget(
+      tester: tester,
+      child: const CreateRoomScreen(),
+      filename: '15_create_room_screen.png',
+    );
+  });
+
+  testWidgets('Capture Screen 16: Join Room Screen with Neutral Disabled Button', (tester) async {
+    await captureWidget(
+      tester: tester,
+      child: const JoinRoomScreen(),
+      filename: '16_join_room_screen.png',
     );
   });
 }

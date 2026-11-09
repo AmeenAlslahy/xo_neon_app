@@ -91,5 +91,38 @@ void main() {
       expect(matrix[1][1], isNull);
       expect(matrix[2][2], equals(Player.o));
     });
+
+    test('copyWithMoveInPlace and undo mutate and restore board state efficiently', () {
+      final board = GameBoard.empty(config);
+      const pos = Position(1, 1);
+
+      expect(board.occupiedCount, equals(0));
+      expect(board.cellAt(pos), isNull);
+
+      board.copyWithMoveInPlace(pos, Player.x);
+      expect(board.occupiedCount, equals(1));
+      expect(board.cellAt(pos), equals(Player.x));
+      expect(board.rawCellAtIndex(4), equals(1)); // 1*3 + 1 = 4
+
+      board.undo(pos);
+      expect(board.occupiedCount, equals(0));
+      expect(board.cellAt(pos), isNull);
+      expect(board.rawCellAtIndex(4), equals(0));
+    });
+
+    test('copyWithMoveIndexInPlace and undoIndex work with flat indices', () {
+      final board = GameBoard.empty(config);
+      const idx = 2; // (0, 2)
+
+      board.copyWithMoveIndexInPlace(idx, Player.o);
+      expect(board.occupiedCount, equals(1));
+      expect(board.cellAtIndex(idx), equals(Player.o));
+      expect(board.cellAt(const Position(0, 2)), equals(Player.o));
+
+      board.undoIndex(idx);
+      expect(board.occupiedCount, equals(0));
+      expect(board.cellAtIndex(idx), isNull);
+      expect(board.cellAt(const Position(0, 2)), isNull);
+    });
   });
 }

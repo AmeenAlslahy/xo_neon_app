@@ -766,4 +766,66 @@ void main() {
       expect(engine.scoreO, 0);
     });
   });
+
+  group('MatchEngine - Chess-Clock Refill Exploit Prevention (Problem 9)', () {
+    test('resetCurrentRound called mid-round does NOT refill player time', () {
+      final time = FakeTimeSource();
+      final config = MatchConfig(
+        boardConfig: BoardConfig.grid3x3,
+        totalRounds: 3,
+        timerConfig: const TimerConfig(
+          enabled: true,
+          durationPerPlayer: Duration(seconds: 60),
+          preset: TimerPreset.oneMinute,
+        ),
+      );
+      final engine = MatchEngine(config: config, timeSource: time);
+
+      // X plays for 40 seconds
+      time.advance(const Duration(seconds: 40));
+      engine.tick();
+      expect(engine.remainingTimeX, const Duration(seconds: 20));
+
+      // Player resets the round mid-game
+      engine.resetCurrentRound();
+
+      // Board is cleared, but X's time MUST NOT be refilled back to 60s!
+      expect(engine.remainingTimeX, const Duration(seconds: 20));
+      expect(engine.remainingTimeO, const Duration(seconds: 60));
+      expect(engine.state.roundState.moveHistory, isEmpty);
+      expect(engine.phase, MatchPhase.inProgress);
+    });
+
+    test('resetCurrentRound after round victory restores round-start remaining time', () {
+      final time = FakeTimeSource();
+      final config = MatchConfig(
+        boardConfig: BoardConfig.grid3x3,
+        totalRounds: 3,
+        timerConfig: const TimerConfig(
+          enabled: true,
+          durationPerPlayer: Duration(seconds: 60),
+          preset: TimerPreset.oneMinute,
+        ),
+      );
+      final engine = MatchEngine(config: config, timeSource: time);
+
+      // Round 1 won by X with 45s left
+      time.advance(const Duration(seconds: 15));
+      engine.tick();
+      engine.makeMove(const Position(0, 0)); // X
+      engine.makeMove(const Position(1, 0)); // O
+      engine.makeMove(const Position(0, 1)); // X
+      engine.makeMove(const Position(1, 1)); // O
+      engine.makeMove(const Position(0, 2)); // X wins!
+
+      expect(engine.phase, MatchPhase.roundEnded);
+
+      // Reset the concluded round
+      engine.resetCurrentRound();
+
+      // Restores the round-start time (60s) for round 1
+      expect(engine.remainingTimeX, const Duration(seconds: 60));
+      expect(engine.phase, MatchPhase.inProgress);
+    });
+  });
 }

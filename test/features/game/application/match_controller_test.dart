@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:xo_neon_app/core/l10n/locale_providers.dart';
+import 'fake_system_move_port.dart';
 import 'package:xo_neon_app/features/game/application/match_controller.dart';
 import 'package:xo_neon_app/features/game/application/match_providers.dart';
 import 'package:xo_neon_app/features/game/domain/xo_engine.dart';
@@ -10,6 +13,8 @@ void main() {
   MatchConfig config({
     int rounds = 3,
     bool timer = false,
+    bool vsSystem = false,
+    Player human = Player.x,
   }) =>
       MatchConfig(
         boardConfig: BoardConfig.grid3x3,
@@ -21,17 +26,22 @@ void main() {
                 preset: TimerPreset.custom,
               )
             : const TimerConfig.disabled(),
+        vsSystem: vsSystem,
+        humanPlayer: human,
       );
 
-  /// Creates a ProviderContainer with the given configuration and a
-  /// deterministic FakeTimeSource. By default the configuration provider is
-  /// overridden and the controller kept alive for the whole test; tests that
-  /// exercise the real fallback or the disposal lifecycle disable those.
+  /// Creates a ProviderContainer with the given configuration, a
+  /// deterministic FakeTimeSource, and a controllable system-move port. By
+  /// default the configuration provider is overridden and the controller kept
+  /// alive for the whole test; tests that exercise the real fallback or the
+  /// disposal lifecycle disable those.
   (ProviderContainer, MatchController) buildContainer({
     MatchConfig? matchConfig,
     FakeTimeSource? timeSource,
     bool overrideConfig = true,
     bool keepAlive = true,
+    FakeSystemMovePort? movePort,
+    Duration systemThinkingDelay = Duration.zero,
   }) {
     final time = timeSource ?? FakeTimeSource();
     final container = ProviderContainer(
@@ -39,6 +49,9 @@ void main() {
         if (overrideConfig)
           matchConfigProvider.overrideWithValue(matchConfig ?? config()),
         timeSourceProvider.overrideWithValue(time),
+        systemMovePortProvider.overrideWithValue(
+            movePort ?? FakeSystemMovePort()),
+        systemThinkingDelayProvider.overrideWithValue(systemThinkingDelay),
       ],
     );
     final controller = container.read(matchControllerProvider.notifier);
@@ -542,6 +555,286 @@ void main() {
     });
   });
 
+  group('MatchController - System Role & Stale Results', () {
+    test('REPRO: the system opens the round automatically when it starts', () {
+      fakeAsync((async) {
+        final port = FakeSystemMovePort()
+          ..enqueueImmediate(const Position(2, 2));
+        final (container, controller) = buildContainer(
+          matchConfig: config(rounds: 1, vsSystem: true, human: Player.o),
+          movePort: port,
+        );
+        addTearDown(container.dispose);
+
+        async.flushMicrotasks();
+        expect(port.callCount, 1);
+        expect(controller.snapshot.match.roundState.moveHistory.length, 1,
+            reason: 'The system (X) plays the opening move automatically');
+        expect(
+            controller.snapshot.match.roundState.board.cellAt(const Position(2, 2)),
+            Player.x);
+        expect(controller.currentTurnPlayer, Player.o, reason: 'Human O next');
+      });
+    });
+
+    test('REPRO: the system replies after the human move and never '
+        're-requests during the human turn', () {
+      fakeAsync((async) {
+        final port = FakeSystemMovePort()
+          ..enqueueImmediate(const Position(1, 1));
+        final (container, controller) = buildContainer(
+          matchConfig: config(rounds: 3, vsSystem: true, human: Player.x),
+          movePort: port,
+        );
+        addTearDown(container.dispose);
+
+        controller.makeMove(const Position(0, 0)); // human X
+        async.flushMicrotasks();
+        expect(port.callCount, 1);
+        expect(controller.snapshot.match.roundState.board.cellAt(const Position(1, 1)),
+            Player.o,
+            reason: 'The system replied through the engine');
+        expect(controller.currentTurnPlayer, Player.x);
+
+        // Extra time and notifications must not re-request during the
+        // human's turn.
+        async.elapse(const Duration(seconds: 5));
+        expect(port.callCount, 1);
+      });
+    });
+
+    test('starter alternation and fixed marks across vs-system rounds', () {
+      fakeAsync((async) {
+        final port = FakeSystemMovePort()
+          ..enqueueImmediate(const Position(0, 0)); // system opens (0,0)
+        final (container, controller) = buildContainer(
+          matchConfig: config(rounds: 3, vsSystem: true, human: Player.o),
+          movePort: port,
+        );
+        addTearDown(container.dispose);
+
+        // Round 1: starter X = SYSTEM → opens automatically.
+        async.flushMicrotasks();
+        expect(controller.snapshot.match.roundState.board.cellAt(const Position(0, 0)),
+            Player.x);
+        expect(controller.currentTurnPlayer, Player.o);
+        final callsAfterRound1Start = port.callCount;
+        expect(callsAfterRound1Start, 1);
+
+        // Human moves; the system replies (default first-empty (0,1)).
+        controller.makeMove(const Position(1, 0)); // human O
+        async.flushMicrotasks();
+        expect(port.callCount, callsAfterRound1Start + 1);
+        expect(controller.snapshot.match.roundState.board.cellAt(const Position(0, 1)),
+            Player.x, reason: 'The system always plays X in this match');
+
+        // Human (2,2); the system completes row 0 → X wins round 1.
+        controller.makeMove(const Position(2, 2)); // human O
+        async.flushMicrotasks();
+        expect(port.callCount, callsAfterRound1Start + 2);
+        expect(controller.isRoundOver, true, reason: 'X completed row 0');
+        expect(controller.snapshot.match.scoreX, 1);
+
+        // Round 2: starter O = HUMAN → no system request at round start.
+        controller.nextRound();
+        async.flushMicrotasks();
+        expect(controller.currentRound, 2);
+        expect(controller.roundStartingPlayer, Player.o);
+        expect(controller.currentTurnPlayer, Player.o);
+        expect(port.callCount, callsAfterRound1Start + 2,
+            reason: 'Round 2 starts with the HUMAN — no system request');
+
+        // The human moves; the system replies with its fixed X mark.
+        controller.makeMove(const Position(1, 0)); // O
+        async.flushMicrotasks();
+        expect(port.callCount, callsAfterRound1Start + 3);
+        expect(controller.snapshot.match.roundState.board.cellAt(const Position(0, 0)),
+            Player.x, reason: 'Marks stay fixed across rounds');
+      });
+    });
+
+    test('REPRO: a stale system move from before a restart is discarded and '
+        'the fresh match still gets its move', () {
+      fakeAsync((async) {
+        final gate = Completer<Position?>();
+        final port = FakeSystemMovePort()..enqueueGate(gate);
+        final (container, controller) = buildContainer(
+          matchConfig: config(rounds: 1, vsSystem: true, human: Player.o),
+          movePort: port,
+        );
+        addTearDown(container.dispose);
+
+        async.flushMicrotasks();
+        expect(port.callCount, 1, reason: 'system X opens round 1');
+
+        // Restart while the system move is in flight.
+        controller.startMatch();
+        expect(controller.snapshot.match.roundState.moveHistory, isEmpty);
+
+        // The OLD request completes with a move for the OLD board: discarded,
+        // and the fresh match re-requests — the system (X) opens it.
+        gate.complete(const Position(1, 1));
+        async.flushMicrotasks();
+
+        expect(port.callCount, 2);
+        expect(controller.snapshot.match.roundState.moveHistory.length, 1,
+            reason: 'The fresh match proceeds with a fresh system move');
+        expect(controller.snapshot.match.roundState.board.cellAt(const Position(0, 0)),
+            Player.x);
+        expect(controller.currentTurnPlayer, Player.o,
+            reason: 'the human O is next in the fresh match');
+      });
+    });
+
+    test('REPRO: resetting the round during thinking discards the stale move',
+        () {
+      fakeAsync((async) {
+        final gate = Completer<Position?>();
+        final port = FakeSystemMovePort()..enqueueGate(gate);
+        final (container, controller) = buildContainer(
+          matchConfig: config(rounds: 3, vsSystem: true, human: Player.x),
+          movePort: port,
+        );
+        addTearDown(container.dispose);
+
+        controller.makeMove(const Position(0, 0)); // human X
+        async.flushMicrotasks();
+        expect(port.callCount, 1, reason: 'system O thinking');
+
+        controller.resetCurrentRound();
+        gate.complete(const Position(1, 1));
+        async.flushMicrotasks();
+
+        expect(controller.snapshot.match.roundState.moveHistory, isEmpty,
+            reason: 'The stale move must not land on the fresh round');
+        expect(controller.currentTurnPlayer, Player.x);
+        // The fresh round re-requests the system move after the human plays.
+        controller.makeMove(const Position(0, 1));
+        async.flushMicrotasks();
+        expect(port.callCount, 2);
+      });
+    });
+
+    test('REPRO: the chess clock expiring during thinking loses the round '
+        'and the stale move is discarded', () {
+      fakeAsync((async) {
+        final gate = Completer<Position?>();
+        final time = FakeTimeSource();
+        final port = FakeSystemMovePort()..enqueueGate(gate);
+        final (container, controller) = buildContainer(
+          matchConfig: config(
+              rounds: 1, timer: true, vsSystem: true, human: Player.o),
+          movePort: port,
+          timeSource: time,
+        );
+        addTearDown(container.dispose);
+
+        async.flushMicrotasks();
+        expect(port.callCount, 1, reason: 'system X thinking');
+
+        // The system's clock runs out while thinking.
+        time.advance(const Duration(seconds: 30));
+        async.elapse(const Duration(seconds: 1));
+        expect(controller.isRoundOver, true,
+            reason: 'The system loses on time');
+        expect(controller.roundEndReason, RoundEndReason.timeout);
+        expect(controller.roundWinner, Player.o, reason: 'The human wins');
+
+        // The stale opening request completes afterwards: discarded —
+        // the system lost on time, so nothing is applied.
+        gate.complete(const Position(1, 1));
+        async.flushMicrotasks();
+        expect(controller.isRoundOver, true);
+        expect(controller.snapshot.match.roundState.moveHistory, isEmpty,
+            reason: 'The stale opening request was discarded on timeout');
+      });
+    });
+
+    test('pause during thinking: no application; manual resume re-requests',
+        () {
+      fakeAsync((async) {
+        final gate = Completer<Position?>();
+        final port = FakeSystemMovePort()..enqueueGate(gate);
+        final (container, controller) = buildContainer(
+          matchConfig: config(rounds: 1, vsSystem: true, human: Player.o),
+          movePort: port,
+        );
+        addTearDown(container.dispose);
+
+        async.flushMicrotasks();
+        expect(port.callCount, 1);
+
+        controller.pause();
+        gate.complete(const Position(2, 2));
+        async.flushMicrotasks();
+        expect(controller.isPaused, true);
+        expect(controller.snapshot.match.roundState.moveHistory, isEmpty,
+            reason: 'No application while paused');
+
+        controller.resume();
+        async.flushMicrotasks();
+        expect(port.callCount, 2,
+            reason: 'Manual resume re-requests the system move');
+        // The fresh request (default first-empty) applies.
+        async.flushMicrotasks();
+        expect(controller.snapshot.match.roundState.board.cellAt(const Position(0, 0)),
+            Player.x);
+        expect(controller.isPaused, false);
+      });
+    });
+
+    test('local play never requests a system move', () {
+      fakeAsync((async) {
+        final port = FakeSystemMovePort();
+        final (container, controller) = buildContainer(
+          matchConfig: config(rounds: 3, vsSystem: false, human: Player.x),
+          movePort: port,
+        );
+        addTearDown(container.dispose);
+
+        controller.makeMove(const Position(0, 0));
+        async.flushMicrotasks();
+        controller.makeMove(const Position(1, 1));
+        async.flushMicrotasks();
+        expect(port.callCount, 0,
+            reason: 'Local two-player mode never touches the system port');
+      });
+    });
+
+    test('port failure falls back to direct calculation and keeps play progressing',
+        () {
+      fakeAsync((async) {
+        final port = FakeSystemMovePort()
+          ..enqueueError(UnsupportedError('dart:isolate is not supported on dart4web'));
+        final (container, controller) = buildContainer(
+          matchConfig: config(rounds: 1, vsSystem: true, human: Player.o),
+          movePort: port,
+        );
+        addTearDown(container.dispose);
+
+        // System is X, starts the game. Port is invoked and fails with UnsupportedError.
+        async.flushMicrotasks();
+        expect(port.callCount, 1);
+
+        // The fallback should have calculated the move directly and applied it.
+        expect(
+          controller.snapshot.match.roundState.moveHistory.isNotEmpty,
+          true,
+          reason: 'System move must be applied via fallback despite port failure',
+        );
+        expect(
+          controller.snapshot.match.roundState.moveHistory.first.player,
+          Player.x,
+        );
+        expect(
+          controller.currentTurnPlayer,
+          Player.o,
+          reason: 'Turn must advance to human player O without freezing',
+        );
+      });
+    });
+  });
+
   group('MatchController - Final Result Policy', () {
     test('REPRO: backgrounding during the result delay freezes the presentation', () {
       fakeAsync((async) {
@@ -659,6 +952,63 @@ void main() {
         // The fresh round is playable.
         controller.makeMove(const Position(0, 0));
         expect(controller.currentTurnPlayer, Player.o);
+      });
+    });
+
+    group('MatchController - System Thinking Delay & Feedback (Problem 10)', () {
+      test('system thinking sets isSystemThinking true and applies move after delay', () {
+        fakeAsync((async) {
+          final port = FakeSystemMovePort()
+            ..enqueueImmediate(const Position(1, 1));
+          final (container, controller) = buildContainer(
+            matchConfig: config(rounds: 1, vsSystem: true, human: Player.x),
+            movePort: port,
+            systemThinkingDelay: const Duration(milliseconds: 500),
+          );
+          addTearDown(container.dispose);
+
+          // Human plays (0, 0)
+          controller.makeMove(const Position(0, 0));
+          async.flushMicrotasks();
+
+          // System is thinking
+          expect(controller.snapshot.isSystemThinking, isTrue);
+          expect(controller.snapshot.match.roundState.board.isEmpty(const Position(1, 1)), isTrue);
+
+          // Advance 250ms (delay half elapsed)
+          async.elapse(const Duration(milliseconds: 250));
+          expect(controller.snapshot.isSystemThinking, isTrue);
+
+          // Advance another 250ms (total 500ms)
+          async.elapse(const Duration(milliseconds: 250));
+          async.flushMicrotasks();
+
+          // Move is now applied and thinking flag cleared
+          expect(controller.snapshot.isSystemThinking, isFalse);
+          expect(controller.snapshot.match.roundState.board.cellAt(const Position(1, 1)), Player.o);
+        });
+      });
+    });
+
+    group('MatchController - Difficulty Progression Integration (Problem 5)', () {
+      test('concluding vs-system match records outcome in progression service', () {
+        fakeAsync((async) {
+          final (container, controller) = buildContainer(
+            matchConfig: config(rounds: 1, vsSystem: true, human: Player.x),
+          );
+          addTearDown(container.dispose);
+
+          final progression = container.read(difficultyProgressionServiceProvider);
+          expect(progression.state.consecutiveWins, 0);
+
+          // Human X wins the match
+          winRoundForX(controller, xStarts: true);
+          async.elapse(const Duration(milliseconds: 1300)); // finalize delay
+
+          expect(controller.isMatchOver, isTrue);
+          expect(progression.state.consecutiveWins, 1);
+          expect(progression.state.totalWins, 1);
+        });
       });
     });
   });

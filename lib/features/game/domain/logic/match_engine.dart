@@ -38,6 +38,8 @@ class MatchEngine {
   /// Null while the clock is suspended (paused / round concluded).
   Duration? _lastAnchor;
   bool _roundResultRecorded = false;
+  Duration _roundStartRemainingX = Duration.zero;
+  Duration _roundStartRemainingO = Duration.zero;
 
   MatchEngine({
     required MatchConfig config,
@@ -57,6 +59,8 @@ class MatchEngine {
       evaluator: evaluator,
     );
 
+    _roundStartRemainingX = _state.remainingTimeX;
+    _roundStartRemainingO = _state.remainingTimeO;
     _lastAnchor = this.timeSource.now();
   }
 
@@ -272,6 +276,8 @@ class MatchEngine {
     );
 
     final resetTime = _state.config.timerConfig.durationPerPlayer;
+    _roundStartRemainingX = resetTime;
+    _roundStartRemainingO = resetTime;
 
     _state = _state.copyWith(
       currentRound: nextRoundNumber,
@@ -373,20 +379,60 @@ class MatchEngine {
   void resetCurrentRound() {
     _roundResultRecorded = false;
 
+    // Problem 9: prevent chess-clock refill exploit.
+    // If the reset is called mid-round, deduct the in-flight elapsed slice first.
+    if (_state.phase == MatchPhase.inProgress &&
+        _state.isTimerEnabled &&
+        _lastAnchor != null) {
+      final elapsed = timeSource.now() - _lastAnchor!;
+      if (elapsed > Duration.zero) {
+        final active = _state.currentTurnPlayer;
+        if (active == Player.x) {
+          final rem = _state.remainingTimeX - elapsed;
+          _state = _state.copyWith(
+            remainingTimeX: rem < Duration.zero ? Duration.zero : rem,
+          );
+        } else {
+          final rem = _state.remainingTimeO - elapsed;
+          _state = _state.copyWith(
+            remainingTimeO: rem < Duration.zero ? Duration.zero : rem,
+          );
+        }
+      }
+    }
+
     _roundEngine = GameEngine(
       config: _state.config.boardConfig,
       startingPlayer: _state.roundStartingPlayer,
       evaluator: evaluator,
     );
 
-    final resetTime = _state.config.timerConfig.durationPerPlayer;
+    // Chess clock exploit prevention (Problem 9):
+    // In chess-clock mode, resetCurrentRound MUST preserve remaining time
+    // instead of refilling back to the initial match duration (durationPerPlayer).
+    // - If reset mid-round: retain the player's current remaining time (no free time refill).
+    // - If replay after round ended: restore the time they had at the start of this round.
+    final Duration remX;
+    final Duration remO;
+    if (_state.config.timerConfig.enabled) {
+      if (_state.phase == MatchPhase.inProgress) {
+        remX = _state.remainingTimeX;
+        remO = _state.remainingTimeO;
+      } else {
+        remX = _roundStartRemainingX;
+        remO = _roundStartRemainingO;
+      }
+    } else {
+      remX = _state.config.timerConfig.durationPerPlayer;
+      remO = _state.config.timerConfig.durationPerPlayer;
+    }
 
     _state = _state.copyWith(
       roundState: _roundEngine.state,
       phase: MatchPhase.inProgress,
       clearRoundResult: true,
-      remainingTimeX: resetTime,
-      remainingTimeO: resetTime,
+      remainingTimeX: remX,
+      remainingTimeO: remO,
     );
 
     _lastAnchor = timeSource.now();
@@ -410,6 +456,8 @@ class MatchEngine {
       evaluator: evaluator,
     );
 
+    _roundStartRemainingX = _state.remainingTimeX;
+    _roundStartRemainingO = _state.remainingTimeO;
     _lastAnchor = timeSource.now();
 
     _notifyListeners();

@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/xo_engine.dart';
+import 'difficulty_progression_service.dart';
 import 'match_providers.dart';
+import 'sound_feedback_service.dart';
+import 'system_move_port.dart';
 
 /// Immutable UI-facing snapshot exposed by [matchControllerProvider]: the
 /// authoritative [MatchState] plus the controller-owned transition countdown.
@@ -16,11 +19,19 @@ class MatchUiState {
   /// scheduling) until an explicit manual resume.
   final bool isSchedulingPaused;
 
+  /// True while the AI system is thinking (artificial delay or background computation).
+  final bool isSystemThinking;
+
+  /// Progression change result from the last completed vs-system match.
+  final ProgressionRecord? lastProgressionRecord;
+
   const MatchUiState({
     required this.match,
     required this.roundTransitionSecondsRemaining,
     required this.isRoundTransitionRunning,
     required this.isSchedulingPaused,
+    this.isSystemThinking = false,
+    this.lastProgressionRecord,
   });
 
   @override
@@ -30,7 +41,9 @@ class MatchUiState {
           other.match == match &&
           other.roundTransitionSecondsRemaining == roundTransitionSecondsRemaining &&
           other.isRoundTransitionRunning == isRoundTransitionRunning &&
-          other.isSchedulingPaused == isSchedulingPaused;
+          other.isSchedulingPaused == isSchedulingPaused &&
+          other.isSystemThinking == isSystemThinking &&
+          other.lastProgressionRecord == lastProgressionRecord;
 
   @override
   int get hashCode => Object.hash(
@@ -38,6 +51,8 @@ class MatchUiState {
         roundTransitionSecondsRemaining,
         isRoundTransitionRunning,
         isSchedulingPaused,
+        isSystemThinking,
+        lastProgressionRecord,
       );
 }
 
@@ -58,6 +73,10 @@ class MatchController extends Notifier<MatchUiState> {
 
   late MatchEngine _engine;
   late TimeSource _timeSource;
+  late SystemMovePort _systemMovePort;
+  late DifficultyProgressionService _progressionService;
+  late Duration _systemThinkingDelay;
+  late SoundFeedbackService _soundFeedback;
 
   /// Mirrors the accessibility setting; affects transition pacing only.
   bool reduceMotion = false;
@@ -81,10 +100,29 @@ class MatchController extends Notifier<MatchUiState> {
   /// required, per the adopted final-result policy.
   bool _resultPendingOnReturn = false;
 
+  /// Incremented on every match-identity change (start, restart, round
+  /// advance, round reset, provider rebuild). System-move results carry the
+  /// generation they were requested under and are discarded on mismatch.
+  int _generation = 0;
+
+  /// True while a system move request is in flight; prevents duplicate
+  /// requests for the same turn.
+  bool _systemMoveInFlight = false;
+  bool _isSystemThinking = false;
+
+  ProgressionRecord? _lastProgressionRecord;
+  bool _progressionRecordedForMatch = false;
+
+  bool _disposed = false;
+
   @override
   MatchUiState build() {
     final config = ref.watch(matchConfigProvider);
     _timeSource = ref.watch(timeSourceProvider);
+    _systemMovePort = ref.watch(systemMovePortProvider);
+    _progressionService = ref.watch(difficultyProgressionServiceProvider);
+    _systemThinkingDelay = ref.watch(systemThinkingDelayProvider);
+    _soundFeedback = ref.watch(soundFeedbackServiceProvider);
     _engine = MatchEngine(
       config: config,
       timeSource: _timeSource,
@@ -95,15 +133,23 @@ class MatchController extends Notifier<MatchUiState> {
     if (config.timerConfig.enabled) {
       _startTicker();
     }
+    // A provider rebuild creates a fresh match instance; in-flight system
+    // results from the previous instance are invalidated by the bumped
+    // generation.
+    _generation++;
+    _maybeTriggerSystemMove();
     return _snapshot();
   }
 
   void _teardown() {
+    _disposed = true;
     _ticker?.cancel();
     _ticker = null;
     _cancelTransitions();
     _schedulingPaused = false;
     _resultPendingOnReturn = false;
+    _systemMoveInFlight = false;
+    _isSystemThinking = false;
     _engine.removeListener(_onEngineStateChanged);
     _engine.dispose();
   }
@@ -113,6 +159,8 @@ class MatchController extends Notifier<MatchUiState> {
         roundTransitionSecondsRemaining: _transitionSecondsRemaining,
         isRoundTransitionRunning: _hasLiveTransition,
         isSchedulingPaused: _schedulingPaused,
+        isSystemThinking: _isSystemThinking,
+        lastProgressionRecord: _lastProgressionRecord,
       );
 
   void _commit() => state = _snapshot();
@@ -152,6 +200,10 @@ class MatchController extends Notifier<MatchUiState> {
   void startMatch({MatchConfig? config}) {
     _cancelTransitions();
     _schedulingPaused = false;
+    _progressionRecordedForMatch = false;
+    _lastProgressionRecord = null;
+    _isSystemThinking = false;
+    _generation++;
     _engine.restartMatch(newConfig: config);
     _syncClock();
     _commit();
@@ -159,7 +211,10 @@ class MatchController extends Notifier<MatchUiState> {
 
   /// Applies a move through the engine (rules). The engine deducts the
   /// elapsed slice from its monotonic source up to this instant.
-  void makeMove(Position position) => _engine.makeMove(position);
+  void makeMove(Position position) {
+    _engine.makeMove(position);
+    _soundFeedback.onMovePlaced();
+  }
 
   /// Pauses the match and stops the chess-clock ticker (user action or app
   /// lifecycle). Approved background policy: the transition countdown is also
@@ -213,6 +268,15 @@ class MatchController extends Notifier<MatchUiState> {
     _commit();
   }
 
+  /// Cancels any scheduled round-transition countdown or match-finalize delay.
+  /// Called when the player chooses to exit the match.
+  void cancelPendingTransitions() {
+    _cancelTransitions();
+    _schedulingPaused = false;
+    _resultPendingOnReturn = false;
+    _commit();
+  }
+
   /// Completes a pending final-result presentation, guarded against stale
   /// results (a round reset or match restart meanwhile drops it).
   void _completeResultPresentation() {
@@ -224,10 +288,12 @@ class MatchController extends Notifier<MatchUiState> {
   }
 
   /// Advances to the next round (manual skip or the auto-transition itself).
-  /// Cancels any pending transition scheduling first.
+  /// Cancels any pending transition scheduling first and invalidates any
+  /// in-flight system move (generation bump).
   void nextRound() {
     _cancelTransitions();
     _schedulingPaused = false;
+    _generation++;
     _engine.nextRound();
     _syncClock();
     _commit();
@@ -236,10 +302,11 @@ class MatchController extends Notifier<MatchUiState> {
   /// Resets the current active round (replay). Cancels any pending
   /// transition scheduling: the result it was scheduled for no longer exists.
   /// An explicit user action, so a background freeze ends here and the fresh
-  /// round runs normally.
+  /// round runs normally. Also invalidates any in-flight system move.
   void resetCurrentRound() {
     _cancelTransitions();
     _schedulingPaused = false;
+    _generation++;
     _engine.resetCurrentRound();
     _syncClock();
     _commit();
@@ -258,17 +325,165 @@ class MatchController extends Notifier<MatchUiState> {
     // The match is over: the chess clock must not continue.
     if (next.isMatchOver) {
       _stopTicker();
+      _handleMatchOver(next);
     }
 
-    if (next.isRoundOver && !next.isMatchOver) {
-      if (next.isFinalRound) {
-        _scheduleFinalize();
-      } else {
-        _scheduleRoundTransition();
+    if (next.isRoundOver) {
+      if (next.roundEndReason == RoundEndReason.draw) {
+        _soundFeedback.onRoundDraw();
+      } else if (next.roundWinner != null) {
+        if (!next.config.vsSystem ||
+            next.roundWinner == next.config.humanPlayer) {
+          _soundFeedback.onRoundWon();
+        } else {
+          _soundFeedback.onRoundLost();
+        }
+      }
+
+      if (!next.isMatchOver) {
+        if (next.isFinalRound) {
+          _scheduleFinalize();
+        } else {
+          _scheduleRoundTransition();
+        }
       }
     }
 
     _commit();
+    _maybeTriggerSystemMove();
+  }
+
+  void _handleMatchOver(MatchState state) {
+    if (_progressionRecordedForMatch) return;
+    _progressionRecordedForMatch = true;
+
+    final config = state.config;
+    if (config.vsSystem) {
+      final humanWon = state.matchWinner == null
+          ? null
+          : (state.matchWinner == config.humanPlayer);
+      _lastProgressionRecord =
+          _progressionService.recordMatchOutcome(humanWon: humanWon);
+    }
+  }
+
+  /// Fires the system player's move request when it is the system's turn in
+  /// a live vs-system match. Guards: never while paused or over, never a
+  /// duplicate request for the same turn, never for the human's mark.
+  void _maybeTriggerSystemMove() {
+    final config = _engine.config;
+    if (!config.vsSystem) {
+      return;
+    }
+    if (_systemMoveInFlight) {
+      return;
+    }
+    if (_engine.phase != MatchPhase.inProgress) {
+      return;
+    }
+    final mover = _engine.currentTurnPlayer;
+    if (mover != config.systemPlayer) {
+      return;
+    }
+
+    final port = _systemMovePort;
+    final token = (
+      generation: _generation,
+      round: _engine.currentRound,
+      mover: mover,
+    );
+    final snapshot = _engine.state.roundState;
+    final difficulty = config.systemDifficulty;
+
+    _systemMoveInFlight = true;
+    _isSystemThinking = true;
+    _commit();
+
+    final moveFuture = port.selectMove(snapshot, difficulty);
+    final delayFuture = _systemThinkingDelay > Duration.zero
+        ? Future.delayed(_systemThinkingDelay)
+        : Future.value();
+
+    unawaited(
+      Future.wait([moveFuture, delayFuture]).then((results) {
+        _systemMoveInFlight = false;
+        _isSystemThinking = false;
+        if (_disposed) {
+          return;
+        }
+        final move = results[0] as Position?;
+        final applied = _applySystemMoveIfCurrent(
+          generation: token.generation,
+          round: token.round,
+          mover: token.mover,
+          move: move,
+        );
+        if (applied) {
+          _soundFeedback.onSystemMove();
+        } else {
+          // The result was stale, but the system's turn may still be pending
+          // (restart/reset/round change) — re-request so play never stalls.
+          _maybeTriggerSystemMove();
+        }
+      }).catchError((Object error) {
+        _systemMoveInFlight = false;
+        _isSystemThinking = false;
+        // A port failure must never crash or freeze the match. Fallback
+        // to direct calculation so the system's turn is always resolved:
+        if (!_disposed) {
+          final fallbackSelector = SystemMoveSelector.forDifficulty(difficulty);
+          final fallbackMove = fallbackSelector.selectMove(snapshot);
+          final applied = _applySystemMoveIfCurrent(
+            generation: token.generation,
+            round: token.round,
+            mover: token.mover,
+            move: fallbackMove,
+          );
+          if (applied) {
+            _soundFeedback.onSystemMove();
+          }
+        }
+      }),
+    );
+  }
+
+  /// Re-validates the full identity of a returned system move — match
+  /// generation, round, phase, turn, board cell, and remaining time — before
+  /// applying it through the engine. Stale results are always discarded; the
+  /// engine itself re-checks turn, occupancy, and chess-clock acceptance.
+  /// Returns true when the move was applied through the engine; false when
+  /// it was stale (the caller re-requests so the system's turn never stalls).
+  bool _applySystemMoveIfCurrent({
+    required int generation,
+    required int round,
+    required Player mover,
+    required Position? move,
+  }) {
+    if (move == null) {
+      return false;
+    }
+    if (_generation != generation) {
+      return false; // match identity changed (restart / reset / round advance)
+    }
+    final state = _engine.state;
+    if (state.currentRound != round) {
+      return false; // round changed
+    }
+    if (state.phase != MatchPhase.inProgress) {
+      return false; // paused or already concluded
+    }
+    if (state.currentTurnPlayer != mover) {
+      return false; // the turn moved on
+    }
+    if (!state.roundState.board.isEmpty(move)) {
+      return false; // the cell is no longer empty
+    }
+    if (state.config.timerConfig.enabled &&
+        state.remainingTimeFor(mover) <= Duration.zero) {
+      return false; // الوقت: رصيد النظام منتهٍ — المهلة تُطبَّق عبر مسار المحرك
+    }
+    _engine.makeMove(move);
+    return true;
   }
 
   /// Keeps the ticker running exactly while an active round has a chess clock.
@@ -345,6 +560,7 @@ class MatchController extends Notifier<MatchUiState> {
     _finalizeTimer = null;
     _hasLiveTransition = false;
     _transitionSecondsRemaining = 0;
+    _isSystemThinking = false;
     // Any pending result presentation belongs to a scheduling that no longer
     // exists once transitions are canceled (reset / restart / advancement).
     _resultPendingOnReturn = false;
