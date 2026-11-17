@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,10 +28,50 @@ import 'package:xo_neon_app/features/online/presentation/screens/create_room_scr
 import 'package:xo_neon_app/features/online/presentation/screens/join_room_screen.dart';
 
 void main() {
-  setUpAll(() {
+  setUpAll(() async {
     final dir = Directory('D:/xo_neon_app/screenshots');
     if (!dir.existsSync()) {
       dir.createSync(recursive: true);
+    }
+
+    // Load MaterialIcons
+    final matIcons = File(r'D:\Flutter\bin\cache\artifacts\material_fonts\materialicons-regular.otf');
+    if (matIcons.existsSync()) {
+      final loader = FontLoader('MaterialIcons');
+      loader.addFont(Future.value(ByteData.view(matIcons.readAsBytesSync().buffer)));
+      await loader.load();
+    }
+
+    // Load CupertinoIcons
+    final cupIcons = File(r'C:\Users\Owner\AppData\Local\Pub\Cache\hosted\pub.dev\cupertino_icons-1.0.9\assets\CupertinoIcons.ttf');
+    if (cupIcons.existsSync()) {
+      final loader = FontLoader('packages/cupertino_icons/CupertinoIcons');
+      loader.addFont(Future.value(ByteData.view(cupIcons.readAsBytesSync().buffer)));
+      await loader.load();
+    }
+
+    // Load Arabic Font (Arial / Segoe UI)
+    final fontFile = File(r'C:\Windows\Fonts\segoeui.ttf');
+    if (fontFile.existsSync()) {
+      final loader = FontLoader('AppFont');
+      loader.addFont(Future.value(ByteData.view(fontFile.readAsBytesSync().buffer)));
+      await loader.load();
+    }
+
+    // Load Monospace Font (Consolas) for room codes
+    final monoFile = File(r'C:\Windows\Fonts\consola.ttf');
+    if (monoFile.existsSync()) {
+      final loader = FontLoader('monospace');
+      loader.addFont(Future.value(ByteData.view(monoFile.readAsBytesSync().buffer)));
+      await loader.load();
+    }
+
+    // Load Emoji Font (Segoe UI Emoji)
+    final emojiFile = File(r'C:\Windows\Fonts\seguiemj.ttf');
+    if (emojiFile.existsSync()) {
+      final loader = FontLoader('EmojiFont');
+      loader.addFont(Future.value(ByteData.view(emojiFile.readAsBytesSync().buffer)));
+      await loader.load();
     }
   });
 
@@ -44,14 +85,51 @@ void main() {
   }) async {
     final repaintKey = GlobalKey();
 
-    tester.view.physicalSize = surfaceSize;
-    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = Size(surfaceSize.width * 2.0, surfaceSize.height * 2.0);
+    tester.view.devicePixelRatio = 2.0;
+
+    final appTheme = NeonTheme.darkTheme.copyWith(
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: IconThemeData(color: NeonColors.cyanX),
+        titleTextStyle: TextStyle(
+          fontFamily: 'AppFont',
+          color: NeonColors.textPrimary,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.8,
+        ),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: NeonColors.surface,
+        elevation: 16,
+        titleTextStyle: TextStyle(
+          fontFamily: 'AppFont',
+          color: NeonColors.textPrimary,
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+        contentTextStyle: TextStyle(
+          fontFamily: 'AppFont',
+          color: NeonColors.textSecondary,
+          fontSize: 14,
+        ),
+      ),
+      textTheme: ThemeData.dark().textTheme.apply(
+        fontFamily: 'AppFont',
+        fontFamilyFallback: const ['EmojiFont', 'monospace'],
+        bodyColor: NeonColors.textPrimary,
+        displayColor: NeonColors.textPrimary,
+      ),
+    );
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: overrides.cast(),
         child: MaterialApp(
-          theme: NeonTheme.darkTheme,
+          theme: appTheme,
           locale: const Locale('ar'),
           supportedLocales: const [Locale('ar')],
           localizationsDelegates: const [
@@ -64,12 +142,18 @@ void main() {
             child: MediaQuery(
               data: MediaQueryData(
                 size: surfaceSize,
-                devicePixelRatio: 1.0,
+                devicePixelRatio: 2.0,
               ),
               child: SizedBox(
                 width: surfaceSize.width,
                 height: surfaceSize.height,
-                child: child,
+                child: DefaultTextStyle(
+                  style: const TextStyle(
+                    fontFamily: 'AppFont',
+                    fontFamilyFallback: ['EmojiFont', 'monospace'],
+                  ),
+                  child: child,
+                ),
               ),
             ),
           ),
