@@ -94,6 +94,20 @@ class OnlineGameState {
       status == OnlineGameStatus.roundWon || status == OnlineGameStatus.roundDraw;
   bool get isMatchOver => status == OnlineGameStatus.matchOver;
 
+  /// Returns a flat list of cells representing the board (defaults to 3x3 with 9 cells).
+  List<Player?> get board => getFlatBoard(3);
+
+  /// Returns a flat list of cells of size [size] * [size].
+  List<Player?> getFlatBoard(int size) {
+    final list = List<Player?>.filled(size * size, null);
+    for (final move in moves) {
+      if (move.row >= 0 && move.row < size && move.col >= 0 && move.col < size) {
+        list[move.row * size + move.col] = move.player;
+      }
+    }
+    return list;
+  }
+
   Map<String, dynamic> toMap() => {
         'currentRound': currentRound,
         'currentTurn': currentTurn.symbol,

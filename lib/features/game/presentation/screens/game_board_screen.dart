@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/neon_colors.dart';
 import '../../../../core/l10n/locale_providers.dart';
+import '../../../../core/services/haptics.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/neon_button.dart';
 import '../../application/match_controller.dart';
 import '../../application/match_providers.dart';
@@ -38,6 +40,11 @@ class GameBoardScreen extends ConsumerWidget {
       final justConcluded =
           next.match.isMatchOver && !(previous?.match.isMatchOver ?? false);
       if (justConcluded && context.mounted) {
+        if (next.match.matchWinner == next.match.config.humanPlayer) {
+          Haptics.matchWon();
+        } else if (next.match.isMatchDraw) {
+          Haptics.draw();
+        }
         _presentFinalMatchDialog(context, ref);
       }
 
@@ -99,125 +106,107 @@ class GameBoardScreen extends ConsumerWidget {
           }
         },
         child: Scaffold(
-          backgroundColor: NeonColors.background,
+          backgroundColor: AppTokens.background,
           appBar: AppBar(
             leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: NeonColors.textSecondary),
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppTokens.textSecondary),
               tooltip: strings.exitToHome,
               onPressed: () => _onExitPressed(context, ref),
             ),
-            title: Text(strings.presetTitle(boardConfig)),
-              actions: [
-                if (!matchState.isRoundOver || schedulingPaused)
-                  IconButton(
-                    tooltip: effectivelyPaused ? strings.resumeGame : strings.pauseGame,
-                    icon: Icon(
-                      effectivelyPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                      color: NeonColors.amberGold,
-                    ),
-                    onPressed: () {
-                      if (effectivelyPaused) {
-                        controller.resume();
-                      } else {
-                        controller.pause();
-                      }
-                    },
-                  ),
-              IconButton(
-                tooltip: strings.resetGame,
-                icon: const Icon(Icons.refresh_rounded, color: NeonColors.cyanX),
-                onPressed: () => _onReplayRoundPressed(context, ref),
-              ),
-            ],
+            title: Text(
+              strings.presetTitle(boardConfig),
+              style: AppTokens.screenTitleStyle,
+            ),
           ),
           body: Container(
             decoration: NeonColors.cyberBackground,
             child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Column(
-                  children: [
-                    // Player Turn HUD with Scores, Rounds, Chess Clocks, and Status
-                    PlayerTurnHeader(
-                      currentPlayer: roundState.currentPlayer,
-                      config: boardConfig,
-                      scoreX: matchState.scoreX,
-                      scoreO: matchState.scoreO,
-                      currentRound: matchState.currentRound,
-                      totalRounds: matchState.config.totalRounds,
-                      remainingTimeX: matchState.remainingTimeX,
-                      remainingTimeO: matchState.remainingTimeO,
-                      isTimerEnabled: matchState.isTimerEnabled,
-                      isPaused: isPaused,
-                      isSystemThinking: ui.isSystemThinking,
-                      status: roundState.status,
-                    ),
-                    const SizedBox(height: 10),
-
-                    // Pause Overlay Banner if Match is Paused
-                    if (isPaused)
-                      Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF160E36),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: NeonColors.amberGold, width: 1.5),
-                          boxShadow: NeonColors.glow(color: NeonColors.amberGold, blur: 10),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.pause_circle_filled_rounded, color: NeonColors.amberGold, size: 22),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                strings.matchPausedDesc,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            TextButton(
-                              style: TextButton.styleFrom(
-                                backgroundColor: NeonColors.amberGold.withValues(alpha: 0.2),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  side: const BorderSide(color: NeonColors.amberGold),
-                                ),
-                              ),
-                              onPressed: () => controller.resume(),
-                              child: Text(
-                                strings.resumeGame,
-                                style: const TextStyle(
-                                  color: NeonColors.amberGold,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                    // Single unified cyber-neon game board
-                    Expanded(
-                      child: Center(
-                        child: GameGridWidget(
-                          config: boardConfig,
-                          board: roundState.board,
-                          winningLine: roundState.winningLine,
-                          allWinningLines: roundState.status is GameWon
-                              ? (roundState.status as GameWon).allWinningLines
-                              : null,
-                          winner: roundState.winner,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: AppTokens.maxTabletContentWidth),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Column(
+                      children: [
+                        // Player Turn HUD with Scores, Rounds, Chess Clocks, and Status
+                        PlayerTurnHeader(
                           currentPlayer: roundState.currentPlayer,
-                          onCellTap: (position) => _handleCellTap(ref, position),
+                          config: boardConfig,
+                          scoreX: matchState.scoreX,
+                          scoreO: matchState.scoreO,
+                          currentRound: matchState.currentRound,
+                          totalRounds: matchState.config.totalRounds,
+                          remainingTimeX: matchState.remainingTimeX,
+                          remainingTimeO: matchState.remainingTimeO,
+                          isTimerEnabled: matchState.isTimerEnabled,
+                          isPaused: effectivelyPaused,
+                          isSystemThinking: ui.isSystemThinking,
+                          status: roundState.status,
                         ),
-                      ),
-                    ),
+                        const SizedBox(height: 10),
+
+                        // Pause Overlay Banner if Match is Paused (Single central resume button)
+                        if (effectivelyPaused)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppTokens.surfaceElevated,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppTokens.amberGold, width: 1.5),
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.pause_circle_filled_rounded, color: AppTokens.amberGold, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    strings.isArabic ? 'المباراة متوقفة' : strings.matchPaused,
+                                    style: const TextStyle(
+                                      color: AppTokens.textPrimary,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  NeonButton(
+                                    label: strings.resumeGame,
+                                    icon: Icons.play_arrow_rounded,
+                                    color: AppTokens.cyan,
+                                    isSolid: true,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                    onPressed: () => controller.resume(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                        // Single unified cyber-neon game board (dimmed and untouchable when paused)
+                        Expanded(
+                          child: Center(
+                            child: Opacity(
+                              opacity: effectivelyPaused ? 0.35 : 1.0,
+                              child: IgnorePointer(
+                                ignoring: effectivelyPaused,
+                                child: GameGridWidget(
+                                  config: boardConfig,
+                                  board: roundState.board,
+                                  winningLine: roundState.winningLine,
+                                  allWinningLines: roundState.status is GameWon
+                                      ? (roundState.status as GameWon).allWinningLines
+                                      : null,
+                                  winner: roundState.winner,
+                                  currentPlayer: roundState.currentPlayer,
+                                  onCellTap: (position) => _handleCellTap(ref, position),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
 
                     // Non-obscuring Round End Transition Banner
                     if (isNonFinalRoundEnded)
@@ -314,7 +303,7 @@ class GameBoardScreen extends ConsumerWidget {
                           Expanded(
                             child: NeonButton(
                               label: strings.resetGame,
-                              icon: Icons.refresh,
+                              icon: Icons.refresh_rounded,
                               isSecondary: true,
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                               onPressed: () => _onReplayRoundPressed(context, ref),
@@ -332,15 +321,17 @@ class GameBoardScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   /// Handles tapping a grid cell, routing to the controller's engine.
   /// Taps during the system player's turn are ignored — the system moves

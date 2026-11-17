@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
+import '../../../../core/services/haptics.dart';
 
 /// Service providing sound and haptic feedback throughout the match lifecycle.
+/// Updated for UX-DELIGHT-01: Routes all tactile feedback through central Haptics service.
 class SoundFeedbackService {
   final bool Function() isSoundEnabled;
   final bool Function() isHapticsEnabled;
@@ -17,9 +19,7 @@ class SoundFeedbackService {
       } catch (_) {}
     }
     if (isHapticsEnabled()) {
-      try {
-        await HapticFeedback.lightImpact();
-      } catch (_) {}
+      await Haptics.markPlaced();
     }
   }
 
@@ -29,11 +29,7 @@ class SoundFeedbackService {
         await SystemSound.play(SystemSoundType.click);
       } catch (_) {}
     }
-    if (isHapticsEnabled()) {
-      try {
-        await HapticFeedback.lightImpact();
-      } catch (_) {}
-    }
+    // No haptics for system moves
   }
 
   Future<void> onRoundWon() async {
@@ -43,25 +39,17 @@ class SoundFeedbackService {
       } catch (_) {}
     }
     if (isHapticsEnabled()) {
-      try {
-        await HapticFeedback.heavyImpact();
-      } catch (_) {}
+      await Haptics.roundSettled();
     }
   }
 
   Future<void> onRoundLost() async {
-    if (isHapticsEnabled()) {
-      try {
-        await HapticFeedback.mediumImpact();
-      } catch (_) {}
-    }
+    // Per UX-DELIGHT-01 table: "خلية غير متاحة / خصم يفوز: لا شيء"
   }
 
   Future<void> onRoundDraw() async {
     if (isHapticsEnabled()) {
-      try {
-        await HapticFeedback.selectionClick();
-      } catch (_) {}
+      await Haptics.draw();
     }
   }
 
@@ -72,9 +60,7 @@ class SoundFeedbackService {
       } catch (_) {}
     }
     if (isHapticsEnabled()) {
-      try {
-        await HapticFeedback.selectionClick();
-      } catch (_) {}
+      await Haptics.primaryTap();
     }
   }
 }

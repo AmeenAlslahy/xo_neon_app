@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../app/theme/neon_colors.dart';
 import '../../../../core/l10n/locale_providers.dart';
+import '../../../../core/services/haptics.dart';
+import '../../../../core/theme/app_tokens.dart';
 
-/// Cyber-neon card displaying a 6-character room code with 1-tap copy.
-class RoomCodeDisplay extends ConsumerWidget {
+/// Neutral card displaying a 6-character room code with 1-tap copy without glow or extra cyan.
+/// Enhanced for UX-DELIGHT-01: copy icon temporarily transforms to checkmark with lightImpact.
+class RoomCodeDisplay extends ConsumerStatefulWidget {
   const RoomCodeDisplay({
     super.key,
     required this.code,
@@ -16,81 +19,110 @@ class RoomCodeDisplay extends ConsumerWidget {
   final String code;
   final VoidCallback? onCopied;
 
-  Future<void> _copyToClipboard(BuildContext context, String message) async {
-    await Clipboard.setData(ClipboardData(text: code));
-    if (context.mounted) {
+  @override
+  ConsumerState<RoomCodeDisplay> createState() => _RoomCodeDisplayState();
+}
+
+class _RoomCodeDisplayState extends ConsumerState<RoomCodeDisplay> {
+  bool _isCopied = false;
+  Timer? _revertTimer;
+
+  @override
+  void dispose() {
+    _revertTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _copyToClipboard(String message) async {
+    final cleanCode = widget.code.replaceAll(RegExp(r'\s+'), '').toUpperCase();
+    await Clipboard.setData(ClipboardData(text: cleanCode));
+
+    // Sensory haptic feedback on copy
+    await Haptics.roomCodeCopied();
+
+    if (mounted) {
+      setState(() => _isCopied = true);
+      _revertTimer?.cancel();
+      _revertTimer = Timer(const Duration(milliseconds: 200), () {
+        if (mounted) {
+          setState(() => _isCopied = false);
+        }
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             message,
             style: const TextStyle(
-              color: NeonColors.textPrimary,
+              color: AppTokens.textPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),
-          backgroundColor: NeonColors.surface,
+          backgroundColor: AppTokens.surface,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: NeonColors.cyanX, width: 1.2),
+            side: const BorderSide(color: AppTokens.borderSubtle, width: 1.2),
           ),
           duration: const Duration(seconds: 2),
         ),
       );
     }
-    onCopied?.call();
+    widget.onCopied?.call();
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final strings = ref.watch(stringsProvider);
+    final cleanCode = widget.code.replaceAll(RegExp(r'\s+'), '').toUpperCase();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: NeonColors.surface,
+        color: AppTokens.surfaceElevated,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: NeonColors.cyanX, width: 1.5),
-        boxShadow: NeonColors.glow(color: NeonColors.cyanX, blur: 8),
+        border: Border.all(color: AppTokens.borderSubtle, width: 1.0),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             strings.roomCodeLabel,
-            style: const TextStyle(
-              color: NeonColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.1,
-            ),
+            style: AppTokens.captionStyle,
           ),
           const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                code,
-                textDirection: TextDirection.ltr,
-                style: const TextStyle(
-                  color: NeonColors.textPrimary,
-                  fontSize: 32,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 8,
-                  fontFamily: 'monospace',
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  cleanCode,
+                  textDirection: TextDirection.ltr,
+                  style: const TextStyle(
+                    color: AppTokens.textPrimary,
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 6,
+                    fontFamily: 'monospace',
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: strings.copyCode,
-                icon: const Icon(
-                  Icons.copy_rounded,
-                  color: NeonColors.cyanX,
-                  size: 24,
+                const SizedBox(width: 8),
+                IconButton(
+                  tooltip: strings.copyCode,
+                  icon: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 150),
+                    child: Icon(
+                      _isCopied ? Icons.check_circle_rounded : Icons.copy_rounded,
+                      key: ValueKey(_isCopied),
+                      color: AppTokens.cyan,
+                      size: 24,
+                    ),
+                  ),
+                  onPressed: () => _copyToClipboard(strings.codeCopied),
                 ),
-                onPressed: () => _copyToClipboard(context, strings.codeCopied),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

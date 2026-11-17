@@ -1,8 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../../../app/theme/neon_colors.dart';
+import '../../../../core/services/haptics.dart';
+import '../../../../core/theme/app_tokens.dart';
 
 /// Card showing a player slot (Host or Guest) in an online match lobby.
-class PlayerSlotCard extends StatelessWidget {
+/// Updated for UX-CLARITY-02 & UX-DELIGHT-01:
+/// - Neutral cards without persistent glow.
+/// - Guest joining triggers lightImpact haptic + 600ms brief gold flash transition.
+/// - Identical height skeleton for waiting guest to eliminate layout shift.
+class PlayerSlotCard extends StatefulWidget {
   const PlayerSlotCard({
     super.key,
     required this.roleTitle,
@@ -23,130 +29,217 @@ class PlayerSlotCard extends StatelessWidget {
   final String youBadgeText;
 
   @override
-  Widget build(BuildContext context) {
-    final themeColor = isHost ? NeonColors.cyanX : NeonColors.orangeO;
+  State<PlayerSlotCard> createState() => _PlayerSlotCardState();
+}
 
-    return Container(
-      padding: const EdgeInsets.all(16),
+class _PlayerSlotCardState extends State<PlayerSlotCard> {
+  bool _isFlashing = false;
+  Timer? _flashTimer;
+
+  @override
+  void didUpdateWidget(covariant PlayerSlotCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Guest slot just transitioned from empty to occupied
+    if (!widget.isHost && widget.isOccupied && !oldWidget.isOccupied) {
+      Haptics.guestJoined();
+      final reduceMotion = MediaQuery.of(context).disableAnimations;
+      if (!reduceMotion) {
+        setState(() => _isFlashing = true);
+        _flashTimer?.cancel();
+        _flashTimer = Timer(const Duration(milliseconds: 600), () {
+          if (mounted) setState(() => _isFlashing = false);
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _flashTimer?.cancel();
+    super.dispose();
+  }
+
+  String _formatPlayerName(String raw) {
+    // Transform "Host (1234)" -> "المضيف · 1234" with Unicode isolate
+    final match = RegExp(r'Host\s*\((.*?)\)').firstMatch(raw);
+    if (match != null) {
+      final id = match.group(1) ?? '';
+      return 'المضيف · \u2068$id\u2069';
+    }
+    return raw;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final symbol = widget.isHost ? 'X' : 'O';
+    final symbolColor = widget.isHost ? AppTokens.cyan : AppTokens.coral;
+
+    final Color borderColor;
+    if (_isFlashing) {
+      borderColor = AppTokens.amberGold;
+    } else if (widget.isOccupied) {
+      borderColor = AppTokens.borderSubtle;
+    } else {
+      borderColor = AppTokens.borderSubtle.withValues(alpha: 0.6);
+    }
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      constraints: const BoxConstraints(minHeight: 76),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: NeonColors.surface,
+        color: _isFlashing
+            ? AppTokens.amberGold.withValues(alpha: 0.12)
+            : AppTokens.surfaceElevated,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isOccupied ? themeColor : NeonColors.borderSubtle,
-          width: isOccupied ? 1.5 : 1.0,
+          color: borderColor,
+          width: _isFlashing ? 1.8 : 1.0,
         ),
-        boxShadow: isOccupied
-            ? NeonColors.glow(color: themeColor, blur: 8)
+        boxShadow: _isFlashing
+            ? [
+                BoxShadow(
+                  color: AppTokens.amberGold.withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                ),
+              ]
             : null,
       ),
       child: Row(
         children: [
-          // Icon badge (X or O)
+          // Symbol Badge (X in Cyan, O in Coral)
           Container(
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isOccupied
-                  ? themeColor.withValues(alpha: 0.15)
-                  : NeonColors.background,
+              color: symbolColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: isOccupied ? themeColor : NeonColors.borderSubtle,
-                width: 1.5,
+                color: symbolColor.withValues(alpha: 0.4),
+                width: 1.0,
               ),
             ),
             child: Center(
               child: Text(
-                isHost ? 'X' : 'O',
+                symbol,
                 style: TextStyle(
-                  color: isOccupied ? themeColor : NeonColors.textSecondary,
-                  fontSize: 22,
+                  color: symbolColor,
+                  fontSize: 20,
                   fontWeight: FontWeight.w900,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
 
           // Player name and status
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      roleTitle,
-                      style: TextStyle(
-                        color: themeColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (isCurrentPlayer) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: NeonColors.amberGold.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: NeonColors.amberGold,
-                            width: 0.8,
-                          ),
-                        ),
-                        child: Text(
-                          youBadgeText,
-                          style: const TextStyle(
-                            color: NeonColors.amberGold,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerStart,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.roleTitle,
+                        style: TextStyle(
+                          color: symbolColor,
+                          fontSize: AppTokens.fontCaption,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
+                      if (widget.isHost && widget.isOccupied) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppTokens.cyan.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            isArabic ? 'المضيف' : 'Host',
+                            style: const TextStyle(
+                              color: AppTokens.cyan,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                      if (widget.isCurrentPlayer) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppTokens.amberGold.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: AppTokens.amberGold,
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            widget.youBadgeText,
+                            style: const TextStyle(
+                              color: AppTokens.amberGold,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  isOccupied ? (playerName ?? '') : waitingText,
-                  textDirection: isOccupied ? TextDirection.ltr : null,
+                  widget.isOccupied
+                      ? (widget.playerName != null
+                          ? _formatPlayerName(widget.playerName!)
+                          : '')
+                      : widget.waitingText,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: isOccupied
-                        ? NeonColors.textPrimary
-                        : NeonColors.textSecondary,
-                    fontSize: 15,
-                    fontWeight:
-                        isOccupied ? FontWeight.bold : FontWeight.normal,
-                    fontStyle:
-                        isOccupied ? FontStyle.normal : FontStyle.italic,
+                    color: widget.isOccupied
+                        ? AppTokens.textPrimary
+                        : AppTokens.textSecondary,
+                    fontSize: AppTokens.fontBody,
+                    fontWeight: widget.isOccupied
+                        ? FontWeight.w600
+                        : FontWeight.w400,
                   ),
                 ),
               ],
             ),
           ),
 
-          // Status icon
-          if (isOccupied)
-            Icon(
-              Icons.check_circle_rounded,
-              color: themeColor,
-              size: 22,
-            )
-          else
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(NeonColors.cyanX),
+          // Occupied Status Indicator (Quiet point, no confusing checkmark)
+          if (widget.isOccupied) ...[
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: symbolColor,
+                shape: BoxShape.circle,
               ),
             ),
+          ] else ...[
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                valueColor: AlwaysStoppedAnimation<Color>(AppTokens.textMuted),
+              ),
+            ),
+          ],
         ],
       ),
     );

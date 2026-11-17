@@ -1,5 +1,5 @@
 name: xo_neon_app
-description: "A new Flutter project."
+description: "Cyber-neon Tic-Tac-Toe game with local and online multiplayer."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -44,6 +44,8 @@ dependencies:
   firebase_core: ^5.1.0
   firebase_auth: ^7.0.1
   firebase_database: ^13.0.1
+  share_plus: 13.3.1
+  app_links: 7.2.2
 
 dev_dependencies:
   flutter_test:
@@ -70,8 +72,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  assets:
-    - assets/icon/
+  # assets:
+  #   - assets/icon/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

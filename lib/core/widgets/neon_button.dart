@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../app/theme/neon_colors.dart';
+import '../services/haptics.dart';
+import '../theme/app_tokens.dart';
 
 /// Variants:
 ///   - Primary solid   : isSolid=true, color=cyanX  → filled cyan, dark text
@@ -14,9 +16,11 @@ class NeonButton extends StatefulWidget {
   final bool isSecondary;
   final bool isSolid;
   final bool isDanger;
+  final bool isOutlineDanger;
   final Color? customTextColor;
   final bool isDisabled;
   final EdgeInsetsGeometry? padding;
+  final Widget? child;
 
   const NeonButton({
     super.key,
@@ -27,9 +31,11 @@ class NeonButton extends StatefulWidget {
     this.isSecondary = false,
     this.isSolid = false,
     this.isDanger = false,
+    this.isOutlineDanger = false,
     this.customTextColor,
     this.isDisabled = false,
     this.padding,
+    this.child,
   });
 
   @override
@@ -38,6 +44,7 @@ class NeonButton extends StatefulWidget {
 
 class _NeonButtonState extends State<NeonButton> {
   bool _isPressed = false;
+  bool _isFocused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +52,7 @@ class _NeonButtonState extends State<NeonButton> {
     final bool isDisabled = widget.isDisabled || widget.onPressed == null;
 
     // Danger overrides colour token
-    final effectiveColor = widget.isDanger
+    final effectiveColor = (widget.isDanger || widget.isOutlineDanger)
         ? NeonColors.dangerRed
         : widget.color;
 
@@ -58,7 +65,12 @@ class _NeonButtonState extends State<NeonButton> {
       textAndIconColor = NeonColors.textSecondary.withValues(alpha: 0.5);
     } else if (widget.customTextColor != null) {
       textAndIconColor = widget.customTextColor!;
-    } else if (widget.isSolid || widget.isDanger) {
+    } else if (widget.isOutlineDanger) {
+      textAndIconColor = NeonColors.dangerRed;
+    } else if (widget.isDanger) {
+      // High contrast dark text on red (#E94D45) gives 5.37:1 contrast (>4.5:1 WCAG AA)
+      textAndIconColor = const Color(0xFF080611);
+    } else if (widget.isSolid) {
       // Auto high-contrast for filled buttons
       textAndIconColor = effectiveColor.computeLuminance() > 0.35
           ? const Color(0xFF080611)
@@ -70,6 +82,8 @@ class _NeonButtonState extends State<NeonButton> {
     // ── Background ────────────────────────────────────────────────────────
     final Color backgroundColor;
     if (isDisabled) {
+      backgroundColor = NeonColors.surfaceElevated;
+    } else if (widget.isOutlineDanger) {
       backgroundColor = NeonColors.surfaceElevated;
     } else if (widget.isDanger) {
       backgroundColor = NeonColors.dangerRed;
@@ -85,6 +99,8 @@ class _NeonButtonState extends State<NeonButton> {
     final Color borderColor;
     if (isDisabled) {
       borderColor = NeonColors.borderSubtle;
+    } else if (widget.isOutlineDanger) {
+      borderColor = NeonColors.dangerRed;
     } else if (widget.isSolid || widget.isDanger) {
       borderColor = Colors.transparent;
     } else {
@@ -93,43 +109,68 @@ class _NeonButtonState extends State<NeonButton> {
 
     // ── Glow (only solid / danger / active primary) ───────────────────────
     final bool hasGlow =
-        !isDisabled && !widget.isSecondary && (widget.isSolid || widget.isDanger);
+        !isDisabled && !widget.isSecondary && !widget.isOutlineDanger && (widget.isSolid || widget.isDanger);
 
-    return Semantics(
-      button: true,
+    return FocusableActionDetector(
       enabled: !isDisabled,
-      label: widget.label,
-      child: GestureDetector(
-        onTapDown: isDisabled
-            ? null
-            : (_) {
-                if (!reduceMotion) setState(() => _isPressed = true);
-              },
-        onTapUp: isDisabled
-            ? null
-            : (_) {
-                if (!reduceMotion) setState(() => _isPressed = false);
-              },
-        onTapCancel: () {
-          if (!reduceMotion && mounted) setState(() => _isPressed = false);
-        },
-        onTap: isDisabled ? null : widget.onPressed,
-        child: AnimatedScale(
-          scale: _isPressed && !reduceMotion ? 0.96 : 1.0,
-          duration: const Duration(milliseconds: 100),
-          child: Container(
-            padding: effectivePadding,
-            decoration: BoxDecoration(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: borderColor,
-                width: widget.isSecondary || isDisabled ? 1.2 : 1.6,
+      onShowFocusHighlight: (show) => setState(() => _isFocused = show),
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            if (!isDisabled) {
+              if (widget.isSolid) {
+                Haptics.primaryTap();
+              }
+              widget.onPressed?.call();
+            }
+            return null;
+          },
+        ),
+      },
+      child: Semantics(
+        button: true,
+        enabled: !isDisabled,
+        label: widget.label,
+        child: GestureDetector(
+          onTapDown: isDisabled
+              ? null
+              : (_) {
+                  if (!reduceMotion) setState(() => _isPressed = true);
+                },
+          onTapUp: isDisabled
+              ? null
+              : (_) {
+                  if (!reduceMotion) setState(() => _isPressed = false);
+                },
+          onTapCancel: () {
+            if (!reduceMotion && mounted) setState(() => _isPressed = false);
+          },
+          onTap: isDisabled
+              ? null
+              : () {
+                  if (widget.isSolid) {
+                    Haptics.primaryTap();
+                  }
+                  widget.onPressed?.call();
+                },
+          child: AnimatedScale(
+            scale: _isPressed && !reduceMotion ? 0.97 : 1.0,
+            duration: AppMotion.press,
+            curve: Curves.easeOut,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: AppTokens.minTouchTargetSize),
+              padding: effectivePadding,
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _isFocused ? Colors.white : borderColor,
+                  width: _isFocused ? 2.0 : (widget.isSecondary || isDisabled ? 1.2 : 1.6),
+                ),
+                boxShadow: hasGlow
+                    ? NeonColors.glow(color: effectiveColor, blur: 12)
+                    : null,
               ),
-              boxShadow: hasGlow
-                  ? NeonColors.glow(color: effectiveColor, blur: 12)
-                  : null,
-            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
@@ -138,8 +179,9 @@ class _NeonButtonState extends State<NeonButton> {
                   Icon(widget.icon, color: textAndIconColor, size: 18),
                   const SizedBox(width: 6),
                 ],
-                // Primary solid buttons: no ellipsis (use FittedBox to shrink)
-                if (widget.isSolid || widget.isDanger)
+                if (widget.child != null)
+                  widget.child!
+                else if (widget.isSolid || widget.isDanger)
                   Flexible(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
@@ -174,6 +216,7 @@ class _NeonButtonState extends State<NeonButton> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

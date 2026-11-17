@@ -49,8 +49,8 @@ class NeonColors {
 
   // ── Text ──────────────────────────────────────────────────────────────────
   static const Color textPrimary   = Color(0xFFF5F2FA);
-  static const Color textSecondary = Color(0xFFB5AEC3);
-  static const Color textMuted     = Color(0xFF7A6F8A); // raised from #64748B
+  static const Color textSecondary = Color(0xFFC9C3D6); // Harmonized with AppTokens (>=4.5:1 on surface)
+  static const Color textMuted     = Color(0xFFB5AEC3); // Harmonized with AppTokens (>=4.5:1 on surface)
 
   // ── Background gradient ───────────────────────────────────────────────────
   static BoxDecoration get cyberBackground => const BoxDecoration(

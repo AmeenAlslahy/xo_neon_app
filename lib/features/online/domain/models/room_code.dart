@@ -45,9 +45,9 @@ class RoomCode {
     return RoomCode._(buffer.toString());
   }
 
-  /// Normalizes raw input: trims whitespace and converts to uppercase.
+  /// Normalizes raw input: strips all whitespace and converts to uppercase.
   static String normalize(String raw) {
-    return raw.trim().toUpperCase();
+    return raw.replaceAll(RegExp(r'\s+'), '').toUpperCase();
   }
 
   /// Checks whether [raw] code matches the valid length and allowed alphabet.

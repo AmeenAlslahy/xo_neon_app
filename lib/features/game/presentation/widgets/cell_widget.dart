@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../../app/theme/neon_colors.dart';
 import '../../domain/xo_engine.dart';
-import 'neon_o_widget.dart';
-import 'neon_x_widget.dart';
+import 'animated_cell_mark.dart';
 
 /// Interactive cell representing a single grid square.
+/// Includes accessible semantics, small-cell glow suppression (<40dp), and clean hover state.
 class CellWidget extends StatefulWidget {
   final Position position;
   final Player? player;
@@ -29,6 +29,7 @@ class _CellWidgetState extends State<CellWidget> {
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
 
     Color borderColor = NeonColors.borderSubtle;
     if (widget.isWinningCell) {
@@ -41,14 +42,22 @@ class _CellWidgetState extends State<CellWidget> {
       borderColor = NeonColors.cyanX.withValues(alpha: 0.8);
     }
 
+    final r1 = widget.position.row + 1;
+    final c1 = widget.position.col + 1;
+    final semanticsLabel = isArabic
+        ? 'الخانة: الصف $r1، العمود $c1'
+        : 'Cell row $r1 column $c1';
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final cellSize = constraints.maxWidth;
         final markSize = cellSize * 0.65;
+        // Suppress glow on small cells (< 40dp) to prevent clutter on 9x9 and 11x11 boards
+        final hasGlow = cellSize >= 40 || widget.isWinningCell;
 
         return Semantics(
-          label: 'Cell row ${widget.position.row} column ${widget.position.col}',
-          value: widget.player?.symbol ?? 'Empty',
+          label: semanticsLabel,
+          value: widget.player?.symbol ?? (isArabic ? 'فارغة' : 'Empty'),
           button: widget.player == null,
           child: GestureDetector(
             onTapDown: (_) {
@@ -88,15 +97,13 @@ class _CellWidgetState extends State<CellWidget> {
               child: Center(
                 child: widget.player == null
                     ? const SizedBox.shrink()
-                    : widget.player == Player.x
-                        ? NeonXWidget(
-                            size: markSize,
-                            isWinning: widget.isWinningCell,
-                          )
-                        : NeonOWidget(
-                            size: markSize,
-                            isWinning: widget.isWinningCell,
-                          ),
+                    : AnimatedCellMark(
+                        key: ValueKey('mark-${widget.position.row}-${widget.position.col}-${widget.player!.symbol}'),
+                        player: widget.player!,
+                        size: markSize,
+                        isWinning: widget.isWinningCell,
+                        hasGlow: hasGlow,
+                      ),
               ),
             ),
           ),
@@ -105,4 +112,3 @@ class _CellWidgetState extends State<CellWidget> {
     );
   }
 }
-

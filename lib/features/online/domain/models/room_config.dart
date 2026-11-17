@@ -42,6 +42,21 @@ class RoomConfig {
     );
   }
 
+  RoomConfig copyWith({
+    int? boardSize,
+    int? winStreak,
+    int? roundsToWin,
+    int? turnTimeLimitSeconds,
+  }) {
+    return RoomConfig(
+      boardSize: boardSize ?? this.boardSize,
+      winStreak: winStreak ?? this.winStreak,
+      roundsToWin: roundsToWin ?? this.roundsToWin,
+      turnTimeLimitSeconds:
+          turnTimeLimitSeconds ?? this.turnTimeLimitSeconds,
+    );
+  }
+
   Map<String, dynamic> toMap() => {
         'boardSize': boardSize,
         'winStreak': winStreak,

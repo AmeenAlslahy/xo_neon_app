@@ -13,21 +13,44 @@ import 'room_lobby_screen.dart';
 
 /// Screen allowing a guest player to enter a 6-character code and join a room.
 class JoinRoomScreen extends ConsumerStatefulWidget {
-  const JoinRoomScreen({super.key});
+  const JoinRoomScreen({super.key, this.initialCode});
+
+  /// Optional initial code pre-filled from an invite link or deep link.
+  final String? initialCode;
 
   @override
   ConsumerState<JoinRoomScreen> createState() => _JoinRoomScreenState();
 }
 
 class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
-  final TextEditingController _codeController = TextEditingController();
+  late final TextEditingController _codeController;
   bool _isJoining = false;
   String? _errorMessage;
 
   @override
+  void initState() {
+    super.initState();
+    final prefilled = widget.initialCode != null
+        ? RoomCode.normalize(widget.initialCode!)
+        : '';
+    _codeController = TextEditingController(text: prefilled);
+    // The Join button's enabled state is derived from the entered code, so
+    // every controller change (typing, paste, autofill) must rebuild the
+    // screen. Relying on TextField.onChanged alone left the button disabled
+    // when the user typed manually because no setState was triggered.
+    _codeController.addListener(_handleCodeChanged);
+  }
+
+  @override
   void dispose() {
+    _codeController.removeListener(_handleCodeChanged);
     _codeController.dispose();
     super.dispose();
+  }
+
+  void _handleCodeChanged() {
+    if (!mounted) return;
+    setState(() => _errorMessage = null);
   }
 
   Future<void> _pasteFromClipboard() async {
@@ -36,8 +59,8 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
     if (text != null && text.isNotEmpty) {
       final normalized = RoomCode.normalize(text);
       if (normalized.length <= RoomCode.codeLength) {
+        // The controller listener rebuilds the screen and clears any error.
         _codeController.text = normalized;
-        setState(() => _errorMessage = null);
       }
     }
   }
@@ -59,13 +82,21 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
     try {
       final auth = ref.read(authServiceProvider);
       final user = await auth.ensureSignedIn();
-      final uid = user?.uid ?? auth.currentUid ?? 'guest_${DateTime.now().millisecondsSinceEpoch}';
+      final uid = user?.uid ?? auth.currentUid;
+      if (uid == null || uid.isEmpty) {
+        if (mounted) {
+          setState(() => _errorMessage = strings.authFailed);
+        }
+        return;
+      }
+      // Show a short readable suffix instead of cutting the label mid-word.
+      final shortUid = uid.length > 4 ? uid.substring(uid.length - 4) : uid;
 
       final roomService = ref.read(roomServiceProvider);
       final result = await roomService.joinRoom(
         rawCode: code,
         guestUid: uid,
-        guestName: 'Guest ($uid)'.substring(0, 11),
+        guestName: 'Guest ($shortUid)',
       );
 
       if (!mounted) return;
@@ -84,12 +115,22 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
           setState(() => _errorMessage = strings.roomNotFound);
         case JoinRoomAlreadyFull():
           setState(() => _errorMessage = strings.roomFull);
-        case JoinRoomError(:final message):
-          setState(() => _errorMessage = message);
+        case JoinRoomError(:final reason):
+          setState(() {
+            _errorMessage = switch (reason) {
+              JoinRoomFailureReason.invalidCode => strings.invalidRoomCode,
+              JoinRoomFailureReason.roomUnavailable => strings.roomUnavailable,
+              JoinRoomFailureReason.connection => strings.networkError,
+              JoinRoomFailureReason.tooManyRequests => strings.tooManyRequests,
+              JoinRoomFailureReason.serviceUnavailable =>
+                strings.serviceUnavailable,
+            };
+          });
       }
     } catch (e) {
+      debugPrint('Failed to join room: $e');
       if (mounted) {
-        setState(() => _errorMessage = 'Failed to join: $e');
+        setState(() => _errorMessage = strings.failedToJoinRoom);
       }
     } finally {
       if (mounted) {
@@ -171,15 +212,10 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
                             RegExp('[A-Za-z0-9]'),
                           ),
                         ],
-                        onChanged: (_) {
-                          if (_errorMessage != null) {
-                            setState(() => _errorMessage = null);
-                          }
-                        },
                         decoration: InputDecoration(
                           hintText: strings.roomCodeHint,
-                          hintStyle: TextStyle(
-                            color: NeonColors.textSecondary.withValues(alpha: 0.5),
+                          hintStyle: const TextStyle(
+                            color: NeonColors.textSecondary,
                             fontSize: 16,
                             letterSpacing: 3,
                           ),
@@ -187,7 +223,7 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
                           filled: true,
                           fillColor: NeonColors.surfaceElevated,
                           suffixIcon: IconButton(
-                            tooltip: strings.copyCode,
+                            tooltip: strings.pasteCode,
                             icon: const Icon(
                               Icons.paste_rounded,
                               color: NeonColors.cyanX,
@@ -256,7 +292,9 @@ class _JoinRoomScreenState extends ConsumerState<JoinRoomScreen> {
 
                 // Join Button (Disabled/neutral until valid 6-char code entered, cyan solid when active)
                 NeonButton(
-                  label: _isJoining ? strings.connectionConnecting : strings.joinButton,
+                  label: _isJoining
+                      ? strings.connectionConnecting
+                      : strings.joinButton,
                   color: NeonColors.cyanX,
                   isSolid: canJoin,
                   isDisabled: !canJoin,

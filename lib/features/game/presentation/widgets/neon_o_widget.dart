@@ -5,11 +5,13 @@ import '../../../../app/theme/neon_colors.dart';
 class NeonOWidget extends StatelessWidget {
   final double size;
   final bool isWinning;
+  final bool hasGlow;
 
   const NeonOWidget({
     super.key,
     this.size = 48.0,
     this.isWinning = false,
+    this.hasGlow = true,
   });
 
   @override
@@ -20,7 +22,7 @@ class NeonOWidget extends StatelessWidget {
         width: size,
         height: size,
         child: CustomPaint(
-          painter: _NeonOPainter(isWinning: isWinning),
+          painter: _NeonOPainter(isWinning: isWinning, hasGlow: hasGlow),
         ),
       ),
     );
@@ -29,8 +31,9 @@ class NeonOWidget extends StatelessWidget {
 
 class _NeonOPainter extends CustomPainter {
   final bool isWinning;
+  final bool hasGlow;
 
-  _NeonOPainter({required this.isWinning});
+  _NeonOPainter({required this.isWinning, this.hasGlow = true});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -38,14 +41,16 @@ class _NeonOPainter extends CustomPainter {
     final radius = (size.width / 2) * 0.72;
     final strokeWidth = size.width * 0.12;
 
-    // 1. Wide outer neon glow
-    final glowPaint = Paint()
-      ..color = (isWinning ? NeonColors.amberGold : NeonColors.orangeO).withValues(alpha: 0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth * 2.2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    // 1. Wide outer neon glow (disabled for small cells)
+    if (hasGlow) {
+      final glowPaint = Paint()
+        ..color = (isWinning ? NeonColors.amberGold : NeonColors.orangeO).withValues(alpha: 0.35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth * 2.2
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
 
-    canvas.drawCircle(center, radius, glowPaint);
+      canvas.drawCircle(center, radius, glowPaint);
+    }
 
     // 2. Focused vibrant stroke
     final vibrantPaint = Paint()

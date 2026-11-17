@@ -38,16 +38,17 @@ void main() {
       expect(find.text('إعداد المباراة'), findsOneWidget);
       expect(find.text('اختر حجم الرقعة'), findsOneWidget);
 
-      // Verify the 4 authorized presets
-      expect(find.text('٣×٣ (كلاسيكي)'), findsOneWidget);
-      expect(find.text('٦×٦ (تكتيكي)'), findsOneWidget);
-      expect(find.text('٩×٩ (احترافي)'), findsOneWidget);
-      expect(find.text('١١×١١ (أسطوري)'), findsOneWidget);
+      // Verify the 4 authorized presets (displayed as clean dimension row)
+      expect(find.text('3×3'), findsOneWidget);
+      expect(find.text('6×6'), findsOneWidget);
+      expect(find.text('9×9'), findsOneWidget);
+      expect(find.text('11×11'), findsOneWidget);
 
       // Verify Total Rounds section (1, 3, 5)
       expect(find.text('عدد الجولات'), findsOneWidget);
       expect(find.text('جولة واحدة'), findsOneWidget);
-      expect(find.text('٣ جولات (افتراضي)'), findsOneWidget);
+      expect(find.text('٣ جولات'), findsOneWidget);
+      expect(find.text('افتراضي'), findsOneWidget);
       expect(find.text('٥ جولات'), findsOneWidget);
 
       // Verify Chess-Clock Timer section
@@ -67,7 +68,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Tap 6x6 option
-      await tester.tap(find.text('٦×٦ (تكتيكي)'));
+      await tester.tap(find.text('6×6'));
       await tester.pumpAndSettle();
 
       // Tap 5 rounds option (scroll it into view first)

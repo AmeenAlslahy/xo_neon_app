@@ -1,12 +1,13 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../app/theme/neon_colors.dart';
 import '../../../../core/l10n/locale_providers.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../domain/xo_engine.dart';
+import 'celebration_glyphs.dart';
 
-/// Passive banner presented between rounds showing the round outcome, the
-/// updated score, and the controller-owned auto-transition countdown.
-/// ALL timing lives in [MatchController]; this widget only renders.
+/// Passive banner presented between non-final rounds showing the round outcome,
+/// the updated score, and the controller-owned auto-transition countdown (UX-DELIGHT-01).
+/// Uses vector celebration glyphs (Trophy for win, Interlocking X/O for draw, text only for loss).
 class RoundEndBanner extends ConsumerWidget {
   final MatchState matchState;
   final int transitionSecondsRemaining;
@@ -23,25 +24,41 @@ class RoundEndBanner extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = matchState;
     final strings = ref.watch(stringsProvider);
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+
     final isWon = state.roundEndReason == RoundEndReason.win;
     final isTimeout = state.roundEndReason == RoundEndReason.timeout;
+    final isHumanWinner = state.roundWinner == state.config.humanPlayer;
 
     final Color themeColor;
     final String headline;
-    final IconData icon;
+    final Widget? glyph;
 
     if (isTimeout) {
-      themeColor = state.roundWinner == Player.x ? NeonColors.cyanX : NeonColors.orangeO;
+      themeColor = AppTokens.amberGold;
       headline = strings.timeoutMessage(state.roundWinner!.other.symbol);
-      icon = Icons.timer_off_outlined;
+      glyph = const Icon(Icons.timer_off_outlined, color: AppTokens.amberGold, size: 24);
     } else if (isWon) {
-      themeColor = state.roundWinner == Player.x ? NeonColors.cyanX : NeonColors.orangeO;
-      headline = strings.winnerWon(state.roundWinner!.symbol);
-      icon = Icons.emoji_events_rounded;
+      if (state.config.vsSystem) {
+        if (isHumanWinner) {
+          themeColor = AppTokens.amberGold;
+          headline = isArabic ? 'جولة لك!' : 'Round Won!';
+          glyph = const TrophyGlyphWidget(size: 28);
+        } else {
+          themeColor = AppTokens.borderSubtle;
+          headline = isArabic ? 'جولة للخصم' : 'Opponent Won Round';
+          glyph = null; // No glyph on loss
+        }
+      } else {
+        themeColor = AppTokens.amberGold;
+        headline = strings.winnerWon(state.roundWinner!.symbol);
+        glyph = const TrophyGlyphWidget(size: 28);
+      }
     } else {
-      themeColor = NeonColors.amberGold;
-      headline = strings.roundDrawMessage;
-      icon = Icons.handshake_outlined;
+      // Draw: calm cyan, NO gold, NO trophy
+      themeColor = AppTokens.cyan;
+      headline = isArabic ? 'تعادل — مباراة متكافئة' : strings.roundDrawMessage;
+      glyph = const DrawGlyphWidget(size: 26);
     }
 
     final seconds = transitionSecondsRemaining > 0 ? transitionSecondsRemaining : 1;
@@ -50,21 +67,28 @@ class RoundEndBanner extends ConsumerWidget {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: NeonColors.surface,
+        color: AppTokens.surfaceElevated,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: themeColor, width: 1.8),
-        boxShadow: [
-          BoxShadow(
-            color: themeColor.withValues(alpha: 0.3),
-            blurRadius: 16,
-            spreadRadius: 1,
-          ),
-        ],
+        border: Border.all(
+          color: themeColor,
+          width: (isWon && isHumanWinner) ? 1.8 : 1.2,
+        ),
+        boxShadow: (isWon && isHumanWinner)
+            ? [
+                BoxShadow(
+                  color: AppTokens.amberGold.withValues(alpha: 0.25),
+                  blurRadius: 14,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
       ),
       child: Row(
         children: [
-          Icon(icon, color: themeColor, size: 24),
-          const SizedBox(width: 10),
+          if (glyph != null) ...[
+            glyph,
+            const SizedBox(width: 10),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,8 +96,10 @@ class RoundEndBanner extends ConsumerWidget {
               children: [
                 Text(
                   headline,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: (isWon && !isHumanWinner)
+                        ? AppTokens.textSecondary
+                        : AppTokens.textPrimary,
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
@@ -93,18 +119,18 @@ class RoundEndBanner extends ConsumerWidget {
           const SizedBox(width: 8),
           TextButton(
             style: TextButton.styleFrom(
-              backgroundColor: themeColor.withValues(alpha: 0.18),
+              backgroundColor: themeColor.withValues(alpha: 0.15),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: themeColor.withValues(alpha: 0.5)),
+                side: BorderSide(color: themeColor.withValues(alpha: 0.4)),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             ),
             onPressed: onNextRound,
             child: Text(
               strings.nextRoundNow,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: themeColor,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),

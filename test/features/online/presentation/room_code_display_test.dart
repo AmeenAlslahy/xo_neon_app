@@ -25,8 +25,10 @@ void main() {
     expect(find.byIcon(Icons.copy_rounded), findsOneWidget);
 
     await tester.runAsync(() async {
-      await tester.tap(find.byIcon(Icons.copy_rounded));
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.tap(find.byType(IconButton));
+      for (var i = 0; i < 10 && !wasCopied; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
     });
     await tester.pump();
 

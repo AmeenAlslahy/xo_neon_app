@@ -8,17 +8,20 @@ class AppStrings {
 
   // App Header & Branding
   String get appTitle => isArabic ? 'XO نيون' : 'XO Neon';
-  String get appSubtitle =>
-      isArabic ? 'لعبة الإكس أو بألوان النيون العصرية' : 'Modern Cyber-Neon Tic-Tac-Toe';
+  String get appSubtitle => isArabic
+      ? 'لعبة الإكس أو بألوان النيون العصرية'
+      : 'Modern Cyber-Neon Tic-Tac-Toe';
 
   // Game Modes
   String get modeLocal => isArabic ? 'لعب محلي' : 'Local Play';
-  String get modeLocalDesc =>
-      isArabic ? 'لاعبان يتنافسان على نفس الهاتف' : 'Two players on the same device';
+  String get modeLocalDesc => isArabic
+      ? 'لاعبان يتنافسان على نفس الهاتف'
+      : 'Two players on the same device';
 
   String get modeFriend => isArabic ? 'اللعب مع صديق' : 'Play with a Friend';
-  String get modeFriendDesc =>
-      isArabic ? 'إنشاء غرفة ودعوة صديق برمز سري' : 'Create a room and invite a friend by code';
+  String get modeFriendDesc => isArabic
+      ? 'إنشاء غرفة ودعوة صديق برمز سري'
+      : 'Create a room and invite a friend by code';
   String get comingSoonBadge =>
       isArabic ? 'قريباً (مرحلة الأونلاين)' : 'Coming Soon (Online Phase)';
 
@@ -89,10 +92,11 @@ class AppStrings {
   String get scoreLabel => isArabic ? 'النقاط' : 'Score';
 
   String boardInfo(int size, int winStreak) => isArabic
-      ? '${toArabicDigits(size)}×${toArabicDigits(size)} • ${toArabicDigits(winStreak)} للفوز'
-      : '$size×$size • $winStreak in a row';
+      ? 'لوحة ${toArabicDigits(size)}×${toArabicDigits(size)} · ${toArabicDigits(winStreak)} على التوالي'
+      : 'Board ${size}x$size · $winStreak in a row';
 
-  String get zoomHint => isArabic ? 'اسحب للتكبير والتحريك' : 'Pinch to zoom & pan';
+  String get zoomHint =>
+      isArabic ? 'اسحب للتكبير والتحريك' : 'Pinch to zoom & pan';
   String get resetGame => isArabic ? 'إعادة الجولة' : 'Replay Round';
   String get exitToHome => isArabic ? 'الرئيسية' : 'Home';
   String get viewBoard => isArabic ? 'رؤية الرقعة' : 'View Board';
@@ -103,7 +107,8 @@ class AppStrings {
   String get exitDialogMessage => isArabic
       ? 'هل أنت متأكد من العودة إلى القائمة الرئيسية؟ ستفقد التقدم في الجولة الحالية.'
       : 'Are you sure you want to return to the home screen? Current round progress will be lost.';
-  String get replayConfirmTitle => isArabic ? 'إعادة تشغيل الجولة؟' : 'Restart Round?';
+  String get replayConfirmTitle =>
+      isArabic ? 'إعادة تشغيل الجولة؟' : 'Restart Round?';
   String get replayConfirmMessage => isArabic
       ? 'هل أنت متأكد من إعادة تشغيل الجولة الحالية؟ ستفقد الحركات التي تم لعبها.'
       : 'Are you sure you want to restart the current round? Played moves will be lost.';
@@ -113,19 +118,23 @@ class AppStrings {
 
   // Result Dialog
   String get victoryTitle => isArabic ? 'فوز مستحق!' : 'Victory!';
-  String winnerIs(String symbol) =>
-      isArabic ? 'الفائز بالجولة هو اللاعب $symbol' : 'Round Winner is Player $symbol';
+  String winnerIs(String symbol) => isArabic
+      ? 'الفائز بالجولة هو اللاعب $symbol'
+      : 'Round Winner is Player $symbol';
   String get drawTitle => isArabic ? 'تعادل حاسم!' : 'It\'s a Draw!';
-  String get drawSubtitle =>
-      isArabic ? 'امتلأت الرقعة دون تحقيق شرط الفوز' : 'The board is full without a winner';
+  String get drawSubtitle => isArabic
+      ? 'امتلأت الرقعة دون تحقيق شرط الفوز'
+      : 'The board is full without a winner';
   String get playAgain => isArabic ? 'العب مجدداً' : 'Play Again';
 
   // Multi-Round Match Settings & Progression
   String get chooseRounds => isArabic ? 'عدد الجولات' : 'Total Rounds';
   String get oneRound => isArabic ? 'جولة واحدة' : '1 Round';
-  String get threeRounds => isArabic ? '٣ جولات (افتراضي)' : '3 Rounds (Default)';
+  String get threeRounds =>
+      isArabic ? '٣ جولات (افتراضي)' : '3 Rounds (Default)';
   String get fiveRounds => isArabic ? '٥ جولات' : '5 Rounds';
-  String roundsCount(int count) => isArabic ? '${toArabicDigits(count)} جولات' : '$count Rounds';
+  String roundsCount(int count) =>
+      isArabic ? '${toArabicDigits(count)} جولات' : '$count Rounds';
   String roundProgress(int current, int total) => isArabic
       ? 'الجولة ${toArabicDigits(current)} من ${toArabicDigits(total)}'
       : 'Round $current of $total';
@@ -135,19 +144,24 @@ class AppStrings {
   String get nextRoundNow => isArabic ? 'الجولة التالية ⏩' : 'Next Round ⏩';
 
   // Chess-Clock Style Timer
-  String get timerOption => isArabic ? 'المؤقت (ساعة شطرنج)' : 'Timer (Chess Clock)';
+  String get timerOption =>
+      isArabic ? 'المؤقت (ساعة شطرنج)' : 'Timer (Chess Clock)';
   String get chessClockBadge => isArabic ? 'ساعة شطرنج' : 'Chess Clock';
   String get noTimer => isArabic ? 'بدون مؤقت' : 'No Timer';
-  String get oneMinutePerPlayer => isArabic ? 'دقيقة لكل لاعب' : '1 min per player';
-  String get threeMinutesPerPlayer => isArabic ? '٣ دقائق لكل لاعب' : '3 mins per player';
-  String get fiveMinutesPerPlayer => isArabic ? '٥ دقائق لكل لاعب' : '5 mins per player';
+  String get oneMinutePerPlayer =>
+      isArabic ? 'دقيقة لكل لاعب' : '1 min per player';
+  String get threeMinutesPerPlayer =>
+      isArabic ? '٣ دقائق لكل لاعب' : '3 mins per player';
+  String get fiveMinutesPerPlayer =>
+      isArabic ? '٥ دقائق لكل لاعب' : '5 mins per player';
   String get customTimer => isArabic ? 'وقت مخصص' : 'Custom Time';
   String customTimerBounds(int minSec, int maxSec) => isArabic
       ? 'من ${toArabicDigits(minSec)} ثانية إلى ${toArabicDigits(maxSec ~/ 60)} دقيقة'
       : 'From ${minSec}s to ${maxSec ~/ 60}m';
   String get timeWarning => isArabic ? 'الوقت ينفد!' : 'Time running low!';
-  String timeoutMessage(String symbol) =>
-      isArabic ? 'انتهى وقت اللاعب $symbol!' : 'Player $symbol ran out of time!';
+  String timeoutMessage(String symbol) => isArabic
+      ? 'انتهى وقت اللاعب $symbol!'
+      : 'Player $symbol ran out of time!';
   String get timeoutLabel => isArabic ? 'انتهاء الوقت' : 'Timeout';
   String formatDuration(Duration d) {
     final m = d.inMinutes;
@@ -160,20 +174,24 @@ class AppStrings {
   // Pause & Resume
   String get pauseGame => isArabic ? 'إيقاف مؤقت' : 'Pause';
   String get resumeGame => isArabic ? 'استئناف اللعب' : 'Resume Play';
-  String get matchPaused => isArabic ? 'المباراة متوقفة مؤقتاً' : 'Match Paused';
+  String get matchPaused =>
+      isArabic ? 'المباراة متوقفة مؤقتاً' : 'Match Paused';
   String get matchPausedDesc => isArabic
       ? 'تم إيقاف المؤقت وحركات المباراة. اضغط استئناف للمتابعة.'
       : 'Timer and moves are paused. Tap resume to continue.';
 
   // Final Match Result Dialog
-  String get finalMatchTitle => isArabic ? 'النتيجة النهائية للمباراة' : 'Final Match Result';
-  String matchWinnerIs(String symbol, int scoreWinner, int scoreLoser) => isArabic
+  String get finalMatchTitle =>
+      isArabic ? 'النتيجة النهائية للمباراة' : 'Final Match Result';
+  String matchWinnerIs(String symbol, int scoreWinner, int scoreLoser) =>
+      isArabic
       ? 'فاز اللاعب $symbol بالمباراة (${toArabicDigits(scoreWinner)} - ${toArabicDigits(scoreLoser)})'
       : 'Player $symbol won the match ($scoreWinner - $scoreLoser)';
   String matchDrawResult(int score) => isArabic
       ? 'تعادل نهائي في المباراة (${toArabicDigits(score)} - ${toArabicDigits(score)})'
       : 'Final Match Draw ($score - $score)';
-  String get roundDrawMessage => isArabic ? 'تعادل في هذه الجولة!' : 'Draw in this round!';
+  String get roundDrawMessage =>
+      isArabic ? 'تعادل في هذه الجولة!' : 'Draw in this round!';
 
   // Difficulty & Auto-Progression
   String get difficultyLabel => isArabic ? 'مستوى الصعوبة' : 'Difficulty Level';
@@ -192,21 +210,31 @@ class AppStrings {
         return difficultyMedium;
     }
   }
+
   String get autoProgression =>
       isArabic ? 'التدرج التلقائي للصعوبة' : 'Auto Difficulty Progression';
   String difficultyPromoted(String level) => isArabic
       ? 'أداء رائع! تم رفع مستوى التحدي إلى: $level'
       : 'Great performance! Challenge level increased to: $level';
-  String get systemThinking => isArabic ? 'النظام يفكر...' : 'System is thinking...';
+  String get systemThinking =>
+      isArabic ? 'النظام يفكر...' : 'System is thinking...';
   String movesCount(int count) =>
       isArabic ? '${toArabicDigits(count)} حركات' : '$count moves';
-  String winRateLabel(int percentage) =>
-      isArabic ? 'نسبة الفوز: ${toArabicDigits(percentage)}%' : 'Win Rate: $percentage%';
-  String get defeatEncouragement =>
-      isArabic ? 'حظ أوفر! كنت قريباً من الفوز' : 'Good effort! You were close!';
-  String streakWins(int count) => isArabic
-      ? '${toArabicDigits(count)} انتصارات متتالية'
-      : '$count win streak';
+  String winRateLabel(int percentage) => isArabic
+      ? 'نسبة الفوز: ${toArabicDigits(percentage)}%'
+      : 'Win Rate: $percentage%';
+  String get defeatEncouragement => isArabic
+      ? 'حظ أوفر! كنت قريباً من الفوز'
+      : 'Good effort! You were close!';
+  String streakWins(int count) {
+    if (!isArabic) return '$count win streak';
+    if (count == 1) return 'انتصار واحد';
+    if (count == 2) return 'انتصاران متتاليان';
+    if (count >= 3 && count <= 10) {
+      return '${toArabicDigits(count)} انتصارات متتالية';
+    }
+    return '${toArabicDigits(count)} انتصاراً متتالياً';
+  }
 
   // Online & Connection strings
   String get connectionConnected => isArabic ? 'متصل' : 'Connected';
@@ -218,8 +246,9 @@ class AppStrings {
 
   // Online Multiplayer (Phase 2)
   String get onlineLobbyTitle => isArabic ? 'اللعب أونلاين' : 'Play Online';
-  String get onlineLobbySubtitle =>
-      isArabic ? 'تحدَّ أصدقاءك في غرف خاصة' : 'Challenge friends in private rooms';
+  String get onlineLobbySubtitle => isArabic
+      ? 'تحدَّ أصدقاءك في غرف خاصة'
+      : 'Challenge friends in private rooms';
   String get createRoom => isArabic ? 'إنشاء غرفة' : 'Create Room';
   String get createRoomDesc => isArabic
       ? 'أنشئ غرفة وشارك الرمز مع صديقك'
@@ -235,8 +264,37 @@ class AppStrings {
   String get joinButton => isArabic ? 'انضمام' : 'Join';
   String get createButton => isArabic ? 'إنشاء الغرفة' : 'Create Room';
   String get copyCode => isArabic ? 'نسخ الرمز' : 'Copy Code';
-  String get codeCopied =>
-      isArabic ? 'تم نسخ رمز الغرفة إلى الحافظة' : 'Room code copied to clipboard';
+  String get pasteCode => isArabic ? 'لصق الرمز' : 'Paste Code';
+  String get emptyCell => isArabic ? 'فارغة' : 'Empty';
+  String get zoomIn => isArabic ? 'تكبير الرقعة' : 'Tap to Zoom In';
+  String get resetView => isArabic ? 'إعادة ضبط الرؤية' : 'Reset View';
+  String get failedToCreateRoom => isArabic
+      ? 'فشل إنشاء الغرفة. يرجى التحقق من الاتصال وإعادة المحاولة.'
+      : 'Failed to create room. Please check your connection and try again.';
+  String get failedToJoinRoom => isArabic
+      ? 'فشل الانضمام إلى الغرفة. يرجى التحقق من الاتصال وإعادة المحاولة.'
+      : 'Failed to join room. Please check your connection and try again.';
+  String get connectionError =>
+      isArabic ? 'حدث خطأ في الاتصال' : 'Connection error';
+  String get authFailed => isArabic
+      ? 'تعذر تسجيل الدخول إلى خدمة اللعب. تحقق من اتصالك بالإنترنت ثم أعد المحاولة.'
+      : 'Could not sign in to the online service. Check your internet connection and try again.';
+  String get roomUnavailable => isArabic
+      ? 'تعذر العثور على الغرفة. قد يكون الرمز غير صحيح، أو أن الغرفة انتهت صلاحيتها، أو لا تملك صلاحية الوصول إليها.'
+      : 'Could not find this room. The code may be incorrect, the room may have expired, or you may not have access to it.';
+  String get networkError => isArabic
+      ? 'تعذر الاتصال بالإنترنت. تحقق من اتصالك ثم أعد المحاولة.'
+      : 'Could not connect. Check your internet connection and try again.';
+  String get tooManyRequests => isArabic
+      ? 'محاولات كثيرة جدًا. انتظر قليلًا ثم أعد المحاولة.'
+      : 'Too many attempts. Please wait a moment and try again.';
+  String get serviceUnavailable => isArabic
+      ? 'تعذر إكمال العملية. أعد المحاولة بعد قليل.'
+      : 'Could not complete the request. Please try again shortly.';
+  String get matchDraw => isArabic ? 'تعادل في المباراة' : 'Match Draw';
+  String get codeCopied => isArabic
+      ? 'تم نسخ رمز الغرفة إلى الحافظة'
+      : 'Room code copied to clipboard';
   String get waitingForPlayer =>
       isArabic ? 'بانتظار انضمام الصديق...' : 'Waiting for friend to join...';
   String get playerJoined =>
@@ -244,11 +302,14 @@ class AppStrings {
   String get host => isArabic ? 'المضيف (X)' : 'Host (X)';
   String get guest => isArabic ? 'الضيف (O)' : 'Guest (O)';
   String get you => isArabic ? 'أنت' : 'You';
-  String get waitingForHost =>
-      isArabic ? 'بانتظار أن يبدأ المضيف المباراة...' : 'Waiting for host to start...';
-  String get roomNotFound =>
-      isArabic ? 'الغرفة غير موجودة أو انتهت صلاحيتها' : 'Room not found or expired';
-  String get roomFull => isArabic ? 'الغرفة ممتلئة بالفعل' : 'Room is already full';
+  String get waitingForHost => isArabic
+      ? 'بانتظار أن يبدأ المضيف المباراة...'
+      : 'Waiting for host to start...';
+  String get roomNotFound => isArabic
+      ? 'الغرفة غير موجودة أو انتهت صلاحيتها'
+      : 'Room not found or expired';
+  String get roomFull =>
+      isArabic ? 'الغرفة ممتلئة بالفعل' : 'Room is already full';
   String get invalidRoomCode => isArabic
       ? 'رمز الغرفة غير صحيح (يجب أن يتكون من 6 خانات)'
       : 'Invalid room code (must be 6 characters)';
@@ -258,6 +319,93 @@ class AppStrings {
       : 'Are you sure you want to leave this room?';
   String get boardSizeLabel => isArabic ? 'حجم اللوحة' : 'Board Size';
   String get roundsToWinLabel => isArabic ? 'جولات الفوز' : 'Rounds to Win';
+
+  // In-lobby room settings editing
+  String get roomSettingsTitle => isArabic ? 'إعدادات الغرفة' : 'Room Settings';
+  String get editRoomSettings => isArabic ? 'تعديل الإعدادات' : 'Edit Settings';
+  String get roomSettingsHint => isArabic
+      ? 'غيّر حجم اللوحة أو عدد الجولات قبل بدء المباراة. سيتم تحديث الإعدادات مباشرةً لدى الطرفين.'
+      : 'Change the board size or rounds before the match starts. Both players are updated instantly.';
+  String get roomSettingsUpdated =>
+      isArabic ? 'تم تحديث إعدادات الغرفة' : 'Room settings updated';
+  String get roomSettingsUpdateFailed => isArabic
+      ? 'تعذر تحديث الإعدادات. تحقق من الاتصال وحاول مجددًا.'
+      : 'Could not update room settings. Check your connection and try again.';
+  String get roomSettingsLocked => isArabic
+      ? 'لا يمكن تغيير الإعدادات بعد بدء المباراة'
+      : 'Settings cannot be changed after the match starts';
+  String get roomSettingsHostOnly => isArabic
+      ? 'المضيف فقط يمكنه تغيير إعدادات الغرفة'
+      : 'Only the host can change room settings';
+  String get guestUpdatedRoomSettings => isArabic
+      ? 'قام المضيف بتحديث إعدادات الغرفة'
+      : 'The host updated the room settings';
+  String get saveChanges => isArabic ? 'حفظ التغييرات' : 'Save Changes';
+  String get cancelAction => isArabic ? 'إلغاء' : 'Cancel';
+  String roundsToWinOption(int rounds) => rounds == 1
+      ? (isArabic ? 'جولة واحدة' : '1 Round')
+      : (isArabic
+            ? 'أول من يفوز بـ ${toArabicDigits(rounds)}'
+            : 'First to $rounds');
+
   String get roomStatusAbandoned =>
       isArabic ? 'تم إلغاء الغرفة من قبل المضيف' : 'Room was abandoned by host';
+
+  // Share & Deep Linking
+  String get shareInvite => isArabic ? 'مشاركة الدعوة' : 'Share Invite';
+  String get shareSubject =>
+      isArabic ? 'دعوة لمباراة XO نيون' : 'XO Neon Match Invite';
+
+  // Match Over & End of Session Actions
+  String get endSession => isArabic ? 'إنهاء الجلسة' : 'End Session';
+  String get replayMatch => isArabic ? 'إعادة اللعب' : 'Play Again';
+  String get changeMatchSettings => isArabic ? 'تغيير الإعدادات' : 'Change Settings';
+  String get endSessionConfirm => isArabic
+      ? 'هل تريد إنهاء الجلسة ومغادرة الغرفة؟'
+      : 'Are you sure you want to end session and leave the room?';
+  String get stayInRoom => isArabic ? 'البقاء في الغرفة' : 'Stay in Room';
+  String get returnToLobby => isArabic ? 'العودة لغرفة الانتظار' : 'Return to Lobby';
+  String get onlyHostCanChangeSettings =>
+      isArabic ? 'المضيف فقط يمكنه تغيير إعدادات الغرفة' : 'Only the host can change room settings';
+
+  // Shared Leaving & Termination
+  String get sessionTerminatedByHost =>
+      isArabic ? 'تم إنهاء الجلسة من قبل المشرف' : 'Session terminated by host';
+  String get hostLeftMatch => isArabic
+      ? 'غادر المضيف المباراة، تم إنهاء الجلسة'
+      : 'Host left the match, session ended';
+  String get guestLeftMatch => isArabic
+      ? 'غادر الضيف المباراة، تم إنهاء الجلسة'
+      : 'Guest left the match, session ended';
+  String get hostDisconnectedMatch => isArabic
+      ? 'انقطع اتصال المضيف، تم إنهاء المباراة'
+      : 'Host disconnected, match ended';
+  String get guestDisconnectedMatch => isArabic
+      ? 'انقطع اتصال الضيف، تم إنهاء المباراة'
+      : 'Guest disconnected, match ended';
+  String get roomClosedMatch => isArabic
+      ? 'تم إغلاق الغرفة وإنهاء الجلسة'
+      : 'Room was closed, session ended';
+  String get guestLeftOrDisconnectedLobby =>
+      isArabic ? 'غادر الضيف أو انقطع اتصاله' : 'Guest left or disconnected';
+  String get guestLeftLobby => guestLeftOrDisconnectedLobby;
+  String get opponentLeftMatch => isArabic
+      ? 'غادر الخصم المباراة، تم إنهاء الجلسة'
+      : 'Opponent left the match, session ended';
+  String get leaveErrorConnection => isArabic
+      ? 'تعذر إرسال إشعار المغادرة بسبب مشكلة في الاتصال بالشبكة.'
+      : 'Could not send leave notification due to a network connection issue.';
+  String get retry => isArabic ? 'إعادة المحاولة' : 'Retry';
+  String get leaveAnyway => isArabic ? 'المغادرة على أي حال' : 'Leave Anyway';
+
+  // Active Session Link Safety
+  String get activeSessionInviteTitle =>
+      isArabic ? 'دعوة لغرفة جديدة' : 'New Room Invite';
+  String activeSessionInviteMessage(String code) => isArabic
+      ? 'وصلت دعوة للانضمام إلى الغرفة $code. هل تريد مغادرة الجلسة الحالية والانتقال إليها؟'
+      : 'Received an invite to room $code. Do you want to leave the current session and join?';
+  String get stayInCurrentSession =>
+      isArabic ? 'البقاء في الجلسة الحالية' : 'Stay in Current Session';
+  String get leaveAndJoinNew =>
+      isArabic ? 'مغادرة والانتقال للغرفة' : 'Leave & Go to Room';
 }

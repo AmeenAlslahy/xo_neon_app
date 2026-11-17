@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/neon_colors.dart';
 import '../../../../core/l10n/app_strings.dart';
 import '../../../../core/l10n/locale_providers.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../domain/xo_engine.dart';
 import 'neon_o_widget.dart';
 import 'neon_x_widget.dart';
 
-/// Top bar displaying players, active turn / terminal outcome indicator, scores,
+/// Top bar displaying players, active turn indicator, scores,
 /// multi-round progression, chess clocks, and board win rule.
+/// Updated for UX-CLARITY-02 with prominent scores (22/700), unified names, and single turn indicator.
 class PlayerTurnHeader extends ConsumerWidget {
   final Player currentPlayer;
   final BoardConfig config;
@@ -57,22 +59,34 @@ class PlayerTurnHeader extends ConsumerWidget {
 
     final Color statusColor;
     if (isPaused) {
-      statusColor = NeonColors.amberGold;
+      statusColor = AppTokens.amberGold;
     } else if (isWon || isTimeout) {
-      statusColor = winner == Player.x ? NeonColors.cyanX : NeonColors.orangeO;
+      statusColor = winner == Player.x ? AppTokens.cyan : AppTokens.coral;
     } else if (isDraw) {
-      statusColor = NeonColors.amberGold;
+      statusColor = AppTokens.amberGold;
     } else {
-      statusColor = isXActive ? NeonColors.cyanX : NeonColors.orangeO;
+      statusColor = isXActive ? AppTokens.cyan : AppTokens.coral;
+    }
+
+    final isArabic = strings.isArabic;
+    final String turnHeaderSemantics;
+    if (isArabic) {
+      turnHeaderSemantics = isGameOver
+          ? (isWon || isTimeout
+              ? 'نهاية المباراة. الفائز: ${winner!.symbol}. النتيجة X: $scoreX، النتيجة O: $scoreO'
+              : 'نهاية المباراة. تعادل. النتيجة X: $scoreX، النتيجة O: $scoreO')
+          : 'نتائج اللاعبين والدور. الدور الحالي: ${currentPlayer.symbol}. النتيجة X: $scoreX، النتيجة O: $scoreO';
+    } else {
+      turnHeaderSemantics = isGameOver
+          ? (isWon || isTimeout
+              ? 'Game over. Winner: ${winner!.symbol}. Score X: $scoreX, Score O: $scoreO'
+              : 'Game over. Draw. Score X: $scoreX, Score O: $scoreO')
+          : 'Player Scores and Turn. Active: ${currentPlayer.symbol}. Score X: $scoreX, Score O: $scoreO';
     }
 
     return Semantics(
       container: true,
-      label: isGameOver
-          ? (isWon || isTimeout
-              ? 'Game over. Winner: ${winner!.symbol}. Score X: $scoreX, Score O: $scoreO'
-              : 'Game over. Draw. Score X: $scoreX, Score O: $scoreO')
-          : 'Player Scores and Turn. Active: ${currentPlayer.symbol}. Score X: $scoreX, Score O: $scoreO',
+      label: turnHeaderSemantics,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -83,15 +97,15 @@ class PlayerTurnHeader extends ConsumerWidget {
               player: Player.x,
               label: strings.playerX,
               score: scoreX,
-              isActive: isXActive || isXWinner,
+              isActive: isXActive,
               isWinner: isXWinner,
-              color: NeonColors.cyanX,
+              color: AppTokens.cyan,
               timeRemaining: remainingTimeX,
               isTimerEnabled: isTimerEnabled,
               strings: strings,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
 
           // Center Status & Round Info Badge
           Expanded(
@@ -105,10 +119,10 @@ class PlayerTurnHeader extends ConsumerWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     margin: const EdgeInsets.only(bottom: 4),
                     decoration: BoxDecoration(
-                      color: NeonColors.surfaceElevated,
+                      color: AppTokens.surfaceElevated,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: NeonColors.borderSubtle,
+                        color: AppTokens.borderSubtle,
                         width: 1.0,
                       ),
                     ),
@@ -117,8 +131,8 @@ class PlayerTurnHeader extends ConsumerWidget {
                       child: Text(
                         strings.roundProgress(currentRound, totalRounds),
                         style: const TextStyle(
-                          color: NeonColors.textPrimary,
-                          fontSize: 11,
+                          color: AppTokens.textPrimary,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -126,142 +140,116 @@ class PlayerTurnHeader extends ConsumerWidget {
                   ),
                 ],
 
-                // Active Turn, Paused, or Terminal Outcome Pill
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: statusColor,
-                      width: 1.5,
+                // Center Outcome/Status Pill (only when paused, game over, or system thinking)
+                if (isPaused || isGameOver || isSystemThinking)
+                  AnimatedContainer(
+                    duration: AppMotion.turnSwitch,
+                    curve: AppMotion.enter,
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    margin: const EdgeInsets.only(bottom: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: statusColor,
+                        width: 1.5,
+                      ),
                     ),
-                    boxShadow: (!isGameOver && !isPaused)
-                        ? NeonColors.glow(color: statusColor, blur: 8)
-                        : null,
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (isPaused) ...[
-                          const Icon(
-                            Icons.pause_circle_outline_rounded,
-                            size: 14,
-                            color: NeonColors.amberGold,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            strings.matchPaused,
-                            style: const TextStyle(
-                              color: NeonColors.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (isPaused) ...[
+                            const Icon(
+                              Icons.pause_circle_outline_rounded,
+                              size: 14,
+                              color: AppTokens.amberGold,
                             ),
-                          ),
-                        ] else if (isTimeout) ...[
-                          const Icon(
-                            Icons.timer_off_outlined,
-                            size: 14,
-                            color: NeonColors.amberGold,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            strings.timeoutMessage(winner!.other.symbol),
-                            style: const TextStyle(
-                              color: NeonColors.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3,
+                            const SizedBox(width: 5),
+                            Text(
+                              strings.matchPaused,
+                              style: const TextStyle(
+                                color: AppTokens.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                        ] else if (isWon) ...[
-                          Icon(
-                            Icons.emoji_events_rounded,
-                            size: 14,
-                            color: statusColor,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            strings.winnerWon(winner!.symbol),
-                            style: const TextStyle(
-                              color: NeonColors.textPrimary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3,
+                          ] else if (isTimeout) ...[
+                            const Icon(
+                              Icons.timer_off_outlined,
+                              size: 14,
+                              color: AppTokens.amberGold,
                             ),
-                          ),
-                        ] else if (isDraw) ...[
-                          const Icon(
-                            Icons.handshake_outlined,
-                            size: 14,
-                            color: NeonColors.amberGold,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            strings.drawStatus,
-                            style: const TextStyle(
-                              color: NeonColors.textPrimary,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.3,
+                            const SizedBox(width: 5),
+                            Text(
+                              strings.timeoutMessage(winner!.other.symbol),
+                              style: const TextStyle(
+                                color: AppTokens.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                          ),
-                        ] else ...[
-                          Text(
-                            strings.currentTurn,
-                            style: const TextStyle(
-                              color: NeonColors.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            currentPlayer.symbol,
-                            style: TextStyle(
+                          ] else if (isWon) ...[
+                            Icon(
+                              Icons.emoji_events_rounded,
+                              size: 14,
                               color: statusColor,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
                             ),
-                          ),
-                          if (isSystemThinking) ...[
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 5),
+                            Text(
+                              strings.winnerWon(winner!.symbol),
+                              style: const TextStyle(
+                                color: AppTokens.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ] else if (isDraw) ...[
+                            const Icon(
+                              Icons.handshake_outlined,
+                              size: 14,
+                              color: AppTokens.amberGold,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              strings.drawStatus,
+                              style: const TextStyle(
+                                color: AppTokens.textPrimary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ] else if (isSystemThinking) ...[
                             const Icon(
                               Icons.auto_awesome,
                               size: 13,
-                              color: NeonColors.amberGold,
+                              color: AppTokens.amberGold,
                             ),
                             const SizedBox(width: 4),
                             Text(
                               strings.systemThinking,
                               style: const TextStyle(
-                                color: NeonColors.amberGold,
+                                color: AppTokens.amberGold,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
-                                letterSpacing: 0.2,
                               ),
                             ),
                           ],
                         ],
-                      ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 5),
 
                 // Match Rule Info Badge (Board size + required win streak)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: NeonColors.surfaceElevated,
+                    color: AppTokens.surfaceElevated,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: NeonColors.borderSubtle,
+                      color: AppTokens.borderSubtle,
                       width: 1.0,
                     ),
                   ),
@@ -272,15 +260,15 @@ class PlayerTurnHeader extends ConsumerWidget {
                       children: [
                         const Icon(
                           Icons.grid_view_rounded,
-                          size: 11,
-                          color: NeonColors.textSecondary,
+                          size: 12,
+                          color: AppTokens.textSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           strings.boardInfo(config.rows, config.winStreak),
                           style: const TextStyle(
-                            color: NeonColors.textSecondary,
-                            fontSize: 11,
+                            color: AppTokens.textSecondary,
+                            fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -291,7 +279,7 @@ class PlayerTurnHeader extends ConsumerWidget {
               ],
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
 
           // Player O Card
           Expanded(
@@ -300,9 +288,9 @@ class PlayerTurnHeader extends ConsumerWidget {
               player: Player.o,
               label: strings.playerO,
               score: scoreO,
-              isActive: isOActive || isOWinner,
+              isActive: isOActive,
               isWinner: isOWinner,
-              color: NeonColors.orangeO,
+              color: AppTokens.coral,
               timeRemaining: remainingTimeO,
               isTimerEnabled: isTimerEnabled,
               strings: strings,
@@ -330,89 +318,113 @@ class PlayerTurnHeader extends ConsumerWidget {
         timeRemaining > Duration.zero;
     final isTimeOut =
         isTimerEnabled && timeRemaining != null && timeRemaining <= Duration.zero;
+    final isHighlighted = isActive || isWinner;
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOut,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 7),
+      duration: AppMotion.turnSwitch,
+      curve: AppMotion.enter,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       decoration: BoxDecoration(
-        color: isActive ? color.withValues(alpha: 0.18) : NeonColors.surfaceGlass,
+        color: isHighlighted ? color.withValues(alpha: 0.10) : AppTokens.surfaceElevated,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isActive ? color : NeonColors.borderSubtle,
-          width: isActive ? 1.8 : 1.0,
+          color: isHighlighted ? color : AppTokens.borderSubtle,
+          width: isHighlighted ? 1.5 : 1.0,
         ),
-        boxShadow: isActive ? NeonColors.glow(color: color, blur: 12) : null,
+        boxShadow: isHighlighted ? NeonColors.glow(color: color, blur: 8) : null,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // Player identity header (icon + name + optional active turn badge)
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 player == Player.x
-                    ? const NeonXWidget(size: 18)
-                    : const NeonOWidget(size: 18),
+                    ? const NeonXWidget(size: 16, hasGlow: false)
+                    : const NeonOWidget(size: 16, hasGlow: false),
                 const SizedBox(width: 4),
                 Text(
                   label,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+                  style: TextStyle(
+                    color: isHighlighted ? AppTokens.textPrimary : AppTokens.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
+                if (isActive) ...[
+                  const SizedBox(width: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          strings.isArabic ? 'الدور الآن' : 'Turn',
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          player.symbol,
+                          style: TextStyle(
+                            color: color,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (isWinner) ...[
                   const SizedBox(width: 3),
-                  const Icon(Icons.star_rounded, size: 12, color: NeonColors.amberGold),
+                  const Icon(Icons.star_rounded, size: 12, color: AppTokens.amberGold),
                 ],
               ],
             ),
           ),
-          const SizedBox(height: 3),
+          const SizedBox(height: 2),
+
+          // Prominent Score Display (22/700)
           FittedBox(
             fit: BoxFit.scaleDown,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '${strings.scoreLabel}: ',
-                  style: const TextStyle(
-                    color: NeonColors.textSecondary,
-                    fontSize: 10,
-                  ),
-                ),
-                Text(
-                  '$score',
-                  style: TextStyle(
-                    color: isActive ? Colors.white : NeonColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
+            child: Text(
+              '$score',
+              style: TextStyle(
+                color: isHighlighted ? AppTokens.textPrimary : AppTokens.textSecondary,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
 
           // Chess-Clock Countdown Badge (if timer enabled)
           if (isTimerEnabled && timeRemaining != null) ...[
-            const SizedBox(height: 3),
+            const SizedBox(height: 2),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
               decoration: BoxDecoration(
                 color: isTimeOut
-                    ? NeonColors.orangeO.withValues(alpha: 0.35)
+                    ? AppTokens.coral.withValues(alpha: 0.35)
                     : (isLowTime
-                        ? NeonColors.amberGold.withValues(alpha: 0.3)
+                        ? AppTokens.amberGold.withValues(alpha: 0.3)
                         : Colors.black.withValues(alpha: 0.45)),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: isTimeOut
-                      ? NeonColors.orangeO
-                      : (isLowTime ? NeonColors.amberGold : color.withValues(alpha: 0.4)),
+                      ? AppTokens.coral
+                      : (isLowTime ? AppTokens.amberGold : color.withValues(alpha: 0.4)),
                   width: isLowTime ? 1.4 : 0.8,
                 ),
               ),
@@ -425,17 +437,17 @@ class PlayerTurnHeader extends ConsumerWidget {
                       isLowTime ? Icons.warning_amber_rounded : Icons.timer_outlined,
                       size: 10,
                       color: isLowTime
-                          ? NeonColors.amberGold
-                          : (isActive ? Colors.white : NeonColors.textSecondary),
+                          ? AppTokens.amberGold
+                          : (isActive ? Colors.white : AppTokens.textSecondary),
                     ),
                     const SizedBox(width: 3),
                     Text(
                       strings.formatDuration(timeRemaining),
                       style: TextStyle(
                         color: isLowTime
-                            ? NeonColors.amberGold
-                            : (isActive ? Colors.white : NeonColors.textSecondary),
-                        fontSize: 10,
+                            ? AppTokens.amberGold
+                            : (isActive ? Colors.white : AppTokens.textSecondary),
+                        fontSize: 11,
                         fontWeight: isLowTime ? FontWeight.w900 : FontWeight.w700,
                       ),
                     ),

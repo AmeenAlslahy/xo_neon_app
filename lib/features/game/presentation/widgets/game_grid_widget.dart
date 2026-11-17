@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../app/theme/neon_colors.dart';
 import '../../../../core/l10n/locale_providers.dart';
+import '../../../../core/services/haptics.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../domain/xo_engine.dart';
-import 'neon_o_widget.dart';
-import 'neon_x_widget.dart';
+import 'animated_cell_mark.dart';
+import 'celebration_particles.dart';
 
 /// Unified cyber-neon game board widget featuring a single glowing container,
 /// crisp inner grid lines, accessible touch targets, and a centered glowing winning line.
@@ -59,11 +61,11 @@ class _GameGridWidgetState extends ConsumerState<GameGridWidget>
     super.initState();
     _winAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 380),
+      duration: AppMotion.winLine, // 420ms
     );
     _winProgress = CurvedAnimation(
       parent: _winAnimController,
-      curve: Curves.easeOutCubic,
+      curve: AppMotion.enter,
     );
 
     if (widget.winningLine != null) {
@@ -127,21 +129,32 @@ class _GameGridWidgetState extends ConsumerState<GameGridWidget>
       builder: (context, constraints) {
         // Calculate maximum square dimension available with safety margin
         final availableSize = math.min(constraints.maxWidth, constraints.maxHeight);
-        // Leave room for padding and border glow
-        final boardSize = math.max(260.0, availableSize - 8.0);
-        final cellSize = boardSize / widget.config.rows;
+        // Leave room for padding and border glow, ensuring board remains square and fits within constraints
+        final boardSize = math.max(0.0, availableSize - 8.0);
+        final cellSize = widget.config.rows > 0 && boardSize > 0
+            ? boardSize / widget.config.rows
+            : 0.0;
 
-        final boardContainer = Container(
+        final isDraw = widget.board.isFull && widget.winningLine == null;
+        final Color boardBorderColor;
+        if (widget.winningLine != null) {
+          boardBorderColor = AppTokens.amberGold;
+        } else if (isDraw) {
+          boardBorderColor = AppTokens.cyan;
+        } else {
+          boardBorderColor = NeonColors.purpleBorder;
+        }
+
+        final boardContainer = AnimatedContainer(
+          duration: AppMotion.winLine,
           width: boardSize,
           height: boardSize,
           decoration: BoxDecoration(
             color: NeonColors.boardSurface,
             borderRadius: BorderRadius.circular(widget.config.rows <= 6 ? 20 : 14),
             border: Border.all(
-              color: widget.winningLine != null
-                  ? (widget.winner == Player.x ? NeonColors.cyanX : NeonColors.orangeO)
-                  : NeonColors.purpleBorder,
-              width: widget.winningLine != null ? 2.4 : 1.8,
+              color: boardBorderColor,
+              width: (widget.winningLine != null || isDraw) ? 2.4 : 1.8,
             ),
             boxShadow: [
               // Purple atmospheric outer glow
@@ -150,15 +163,15 @@ class _GameGridWidgetState extends ConsumerState<GameGridWidget>
                 blurRadius: 18,
                 spreadRadius: 1,
               ),
-              // Dynamic player/winner aura
+              // Dynamic player/winner aura (Gold on win, calm cyan on draw)
               BoxShadow(
                 color: widget.winningLine != null
-                    ? (widget.winner == Player.x
-                        ? NeonColors.cyanGlow
-                        : NeonColors.orangeGlow)
-                    : (widget.currentPlayer == Player.x
-                        ? NeonColors.cyanGlow.withValues(alpha: 0.15)
-                        : NeonColors.orangeGlow.withValues(alpha: 0.15)),
+                    ? AppTokens.amberGold.withValues(alpha: 0.35)
+                    : (isDraw
+                        ? AppTokens.cyan.withValues(alpha: 0.30)
+                        : (widget.currentPlayer == Player.x
+                            ? NeonColors.cyanGlow.withValues(alpha: 0.15)
+                            : NeonColors.orangeGlow.withValues(alpha: 0.15))),
                 blurRadius: 28,
                 spreadRadius: 2,
               ),
@@ -204,7 +217,7 @@ class _GameGridWidgetState extends ConsumerState<GameGridWidget>
                 ),
               ),
 
-              // 3. Centered Glowing Winning Laser Line
+              // 3. Centered Glowing Winning Laser Line (Gold)
               if (widget.winningLine != null)
                 AnimatedBuilder(
                   animation: _winProgress,
@@ -221,87 +234,107 @@ class _GameGridWidgetState extends ConsumerState<GameGridWidget>
                     );
                   },
                 ),
+
+              // 4. Meso Celebration Particles (Behind IgnorePointer, at line center)
+              if (widget.winningLine != null) ...[
+                Builder(builder: (ctx) {
+                  final line = widget.winningLine!;
+                  final centerOffset = Offset(
+                    ((line.start.col + line.end.col) / 2.0 + 0.5) * cellSize,
+                    ((line.start.row + line.end.row) / 2.0 + 0.5) * cellSize,
+                  );
+                  return CelebrationParticlesOverlay(origin: centerOffset);
+                }),
+              ],
             ],
           ),
         );
 
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // Center Board (with InteractiveViewer for 9x9 and 11x11 pinch & zoom support)
-            Center(
-              child: isLargeGrid
-                  ? InteractiveViewer(
-                      transformationController: _transformController,
-                      minScale: 1.0,
-                      maxScale: 2.8,
-                      clipBehavior: Clip.none,
-                      onInteractionStart: (_) {
-                        _isInteracting = true;
-                      },
-                      onInteractionEnd: (_) {
-                        final currentScale = _transformController.value.getMaxScaleOnAxis();
-                        setState(() {
-                          _isZoomed = currentScale > 1.15;
-                          _isInteracting = false;
-                          _lastInteractionEndTime = DateTime.now();
-                        });
-                      },
-                      child: boardContainer,
-                    )
-                  : boardContainer,
-            ),
+        final bool canPan = _isZoomed || _transformController.value.getMaxScaleOnAxis() > 1.01;
 
-            // Zoom Helper / Reset Toggle for 9x9 and 11x11
-            if (isLargeGrid)
-              Positioned(
-                bottom: 4,
-                child: Semantics(
-                  button: true,
-                  label: _isZoomed ? 'إعادة ضبط الرؤية' : 'تكبير الرقعة',
-                  child: GestureDetector(
-                    onTap: () => _toggleZoom(boardSize),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: NeonColors.surfaceGlass,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _isZoomed ? NeonColors.amberGold : NeonColors.purpleBorder,
-                          width: 1.2,
+        final boardWidget = isLargeGrid
+            ? InteractiveViewer(
+                transformationController: _transformController,
+                minScale: 1.0,
+                maxScale: 3.0,
+                panEnabled: canPan,
+                scaleEnabled: true,
+                clipBehavior: Clip.none,
+                onInteractionStart: (_) {
+                  _isInteracting = true;
+                },
+                onInteractionEnd: (_) {
+                  final currentScale = _transformController.value.getMaxScaleOnAxis();
+                  setState(() {
+                    _isZoomed = currentScale > 1.05;
+                    _isInteracting = false;
+                    _lastInteractionEndTime = DateTime.now();
+                  });
+                },
+                child: boardContainer,
+              )
+            : boardContainer;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Flexible(
+              child: Center(
+                child: boardWidget,
+              ),
+            ),
+            if (isLargeGrid) ...[
+              const SizedBox(height: 8),
+              Semantics(
+                button: true,
+                label: _isZoomed
+                    ? (_isArabic ? 'إعادة ضبط الرؤية' : 'Reset View')
+                    : (_isArabic ? 'تكبير الرقعة' : 'Tap to Zoom In'),
+                child: GestureDetector(
+                  onTap: () => _toggleZoom(boardSize),
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: AppTokens.surfaceElevated,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _isZoomed ? AppTokens.amberGold : AppTokens.cyan,
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.4),
+                          blurRadius: 8,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 8,
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _isZoomed ? Icons.zoom_out_map : Icons.zoom_in,
+                          size: 15,
+                          color: _isZoomed ? AppTokens.amberGold : AppTokens.cyan,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _isZoomed
+                              ? (_isArabic ? 'إعادة ضبط الرؤية' : 'Reset View')
+                              : (_isArabic ? 'تكبير الرقعة' : 'Tap to Zoom In'),
+                          style: TextStyle(
+                            color: _isZoomed ? AppTokens.amberGold : AppTokens.textPrimary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _isZoomed ? Icons.zoom_out_map : Icons.zoom_in,
-                            size: 14,
-                            color: _isZoomed ? NeonColors.amberGold : NeonColors.cyanX,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            _isZoomed
-                                ? (_isArabic ? 'إعادة الرؤية كاملة (1x)' : 'Reset View (1x)')
-                                : (_isArabic ? 'تكبير الرقعة للّمس الدقيق' : 'Tap to Zoom In'),
-                            style: TextStyle(
-                              color: _isZoomed ? NeonColors.amberGold : NeonColors.textSecondary,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
+            ],
           ],
         );
       },
@@ -323,6 +356,7 @@ class _GameGridWidgetState extends ConsumerState<GameGridWidget>
         ? 'الخانة: الصف $row1Based، العمود $col1Based'
         : 'Cell row $row1Based column $col1Based';
     final cellValue = player?.symbol ?? (_isArabic ? 'فارغة' : 'Empty');
+    final hasGlow = cellSize >= 40 || isWinning;
 
     return Semantics(
       label: cellSemanticLabel,
@@ -332,40 +366,39 @@ class _GameGridWidgetState extends ConsumerState<GameGridWidget>
       child: Material(
         color: Colors.transparent,
         child: InkWell(
+          key: ValueKey('cell-${position.row}-${position.col}'),
           onTap: (widget.winningLine == null && player == null && widget.onCellTap != null)
               ? () {
                   if (_isInteracting ||
                       DateTime.now().difference(_lastInteractionEndTime).inMilliseconds < 180) {
                     return;
                   }
+                  Haptics.markPlaced();
                   widget.onCellTap!(position);
                 }
               : null,
           splashColor: (widget.currentPlayer == Player.x
-                  ? NeonColors.cyanX
-                  : NeonColors.orangeO)
+                  ? AppTokens.cyan
+                  : AppTokens.coral)
               .withValues(alpha: 0.25),
           highlightColor: (widget.currentPlayer == Player.x
-                  ? NeonColors.cyanX
-                  : NeonColors.orangeO)
+                  ? AppTokens.cyan
+                  : AppTokens.coral)
               .withValues(alpha: 0.12),
           child: Container(
             color: isWinning
-                ? (player == Player.x ? NeonColors.cyanX : NeonColors.orangeO)
-                    .withValues(alpha: 0.14)
+                ? AppTokens.amberGold.withValues(alpha: 0.14)
                 : Colors.transparent,
             alignment: Alignment.center,
             child: player == null
                 ? const SizedBox.shrink()
-                : player == Player.x
-                    ? NeonXWidget(
-                        size: markSize,
-                        isWinning: isWinning,
-                      )
-                    : NeonOWidget(
-                        size: markSize,
-                        isWinning: isWinning,
-                      ),
+                : AnimatedCellMark(
+                    key: ValueKey('grid-mark-${position.row}-${position.col}-${player.symbol}'),
+                    player: player,
+                    size: markSize,
+                    isWinning: isWinning,
+                    hasGlow: hasGlow,
+                  ),
           ),
         ),
       ),
@@ -454,7 +487,8 @@ class _WinningLinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final effectiveColor = winner == Player.x ? NeonColors.cyanX : NeonColors.orangeO;
+    // Ticket UX-DELIGHT-01: Winning line is Gold (#F4BD3E) + subtle halo
+    const effectiveColor = AppTokens.amberGold;
     final strokeWidth = rows <= 3
         ? 8.0
         : rows <= 6

@@ -775,4 +775,56 @@ void main() {
       filename: '16_join_room_screen.png',
     );
   });
+
+  testWidgets('Capture Screen 17: Join Room Screen with Prefilled Deep Link Code', (tester) async {
+    await captureWidget(
+      tester: tester,
+      child: const JoinRoomScreen(initialCode: 'X9K2B4'),
+      filename: '17_join_room_prefilled_code.png',
+    );
+  });
+
+  testWidgets('Capture Screen 18: Match Terminated by Host Overlay', (tester) async {
+    final room = RoomModel(
+      code: 'X9K2B4',
+      hostUid: 'host_1',
+      hostName: 'CyberHost',
+      guestUid: 'guest_2',
+      guestName: 'CyberGuest',
+      config: RoomConfig.standard3x3(),
+      status: RoomStatus.abandoned,
+      termination: const RoomTermination(
+        reason: 'host_left',
+        byUid: 'host_1',
+        byRole: 'host',
+        message: 'تم إنهاء الجلسة من قبل المشرف',
+        timestampMs: 200,
+      ),
+      createdAtMs: 100,
+      lastActiveMs: 100,
+    );
+
+    const game = OnlineGameState(
+      currentRound: 1,
+      currentTurn: Player.x,
+      hostScore: 1,
+      guestScore: 0,
+      moves: [],
+      status: OnlineGameStatus.matchOver,
+      lastUpdatedMs: 100,
+    );
+
+    await captureWidget(
+      tester: tester,
+      overrides: [
+        roomStreamProvider(room.code).overrideWith((ref) => Stream.value(room)),
+        onlineGameStreamProvider(room.code).overrideWith((ref) => Stream.value(game)),
+      ],
+      child: OnlineGameBoardScreen(
+        room: room,
+        isHost: false, // Guest sees "تم إنهاء الجلسة من قبل المشرف"
+      ),
+      filename: '18_match_terminated_overlay.png',
+    );
+  });
 }

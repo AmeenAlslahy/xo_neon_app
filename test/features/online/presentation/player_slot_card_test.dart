@@ -25,7 +25,7 @@ void main() {
     expect(find.text('CyberPlayer'), findsOneWidget);
     expect(find.text('X'), findsOneWidget);
     expect(find.text('You'), findsOneWidget);
-    expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
+    expect(find.text('Host'), findsOneWidget);
   });
 
   testWidgets('PlayerSlotCard displays waiting state with progress indicator',

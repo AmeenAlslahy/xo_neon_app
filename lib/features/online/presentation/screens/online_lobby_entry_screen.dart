@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../app/theme/neon_colors.dart';
 import '../../../../core/l10n/locale_providers.dart';
+import '../../../../core/theme/app_tokens.dart';
 import '../../../../core/widgets/neon_card.dart';
 import '../widgets/connection_status_badge.dart';
 import 'create_room_screen.dart';
@@ -10,6 +11,7 @@ import 'join_room_screen.dart';
 
 /// Entry screen for online multiplayer, allowing the user to either host
 /// a new room or join an existing one by code.
+/// Updated for UX-CLARITY-02: single title, labeled connection status badge, vertically centered layout.
 class OnlineLobbyEntryScreen extends ConsumerWidget {
   const OnlineLobbyEntryScreen({super.key});
 
@@ -18,201 +20,179 @@ class OnlineLobbyEntryScreen extends ConsumerWidget {
     final strings = ref.watch(stringsProvider);
 
     return Scaffold(
-      backgroundColor: NeonColors.background,
+      backgroundColor: AppTokens.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
           strings.onlineLobbyTitle,
-          style: const TextStyle(
-            color: NeonColors.textPrimary,
-            fontWeight: FontWeight.bold,
-          ),
+          style: AppTokens.screenTitleStyle,
         ),
         actions: const [
           Padding(
             padding: EdgeInsetsDirectional.only(end: 16),
-            child: Center(child: ConnectionStatusBadge()),
+            child: Center(
+              child: ConnectionStatusBadge(showLabel: true),
+            ),
           ),
         ],
-        iconTheme: const IconThemeData(color: NeonColors.cyanX),
+        iconTheme: const IconThemeData(color: AppTokens.cyan),
       ),
       body: Container(
         decoration: NeonColors.cyberBackground,
         child: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Header Subtitle
-                Center(
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: NeonColors.surfaceElevated,
-                          border: Border.all(
-                            color: NeonColors.cyanX,
-                            width: 1.5,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: AppTokens.maxTabletContentWidth),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Icon + Subtitle (No duplicate "العب أونلاين" title)
+                    Center(
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppTokens.surfaceElevated,
+                              border: Border.all(
+                                color: AppTokens.cyan,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: const Icon(
+                              Icons.wifi_tethering_rounded,
+                              color: AppTokens.cyan,
+                              size: 38,
+                            ),
                           ),
-                        ),
-                        child: const Icon(
-                          Icons.wifi_tethering_rounded,
-                          color: NeonColors.cyanX,
-                          size: 40,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        strings.onlineLobbyTitle,
-                        style: const TextStyle(
-                          color: NeonColors.textPrimary,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        strings.onlineLobbySubtitle,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: NeonColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 48),
-
-                // Card 1: Create Room (Host)
-                NeonCard(
-                  borderColor: NeonColors.borderSubtle,
-                  hasGlow: false,
-                  padding: const EdgeInsets.all(20),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const CreateRoomScreen(),
-                      ),
-                    );
-                  },
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: NeonColors.cyanX.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: NeonColors.cyanX, width: 1.5),
-                        ),
-                        child: const Icon(
-                          Icons.add_circle_outline_rounded,
-                          color: NeonColors.cyanX,
-                          size: 28,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              strings.createRoom,
-                              style: const TextStyle(
-                                color: NeonColors.textPrimary,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              strings.createRoomDesc,
-                              style: const TextStyle(
-                                color: NeonColors.textSecondary,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(
-                        Icons.arrow_forward_ios,
-                        color: NeonColors.cyanX,
-                        size: 16,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Card 2: Join Room (Guest) - Unified with Cyan action identity
-                NeonCard(
-                  borderColor: NeonColors.borderSubtle,
-                  hasGlow: false,
-                  padding: const EdgeInsets.all(20),
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const JoinRoomScreen(),
-                      ),
-                    );
-                  },
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: NeonColors.cyanX.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: NeonColors.cyanX,
-                            width: 1.5,
+                          const SizedBox(height: 14),
+                          Text(
+                            strings.onlineLobbySubtitle,
+                            textAlign: TextAlign.center,
+                            style: AppTokens.bodyStyle,
                           ),
-                        ),
-                        child: const Icon(
-                          Icons.login_rounded,
-                          color: NeonColors.cyanX,
-                          size: 28,
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              strings.joinRoom,
-                              style: const TextStyle(
-                                color: NeonColors.textPrimary,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Card 1: Create Room (Host)
+                    NeonCard(
+                      borderColor: AppTokens.borderSubtle,
+                      hasGlow: false,
+                      padding: const EdgeInsets.all(18),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CreateRoomScreen(),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppTokens.cyan.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppTokens.cyan, width: 1.5),
+                            ),
+                            child: const Icon(
+                              Icons.add_circle_outline_rounded,
+                              color: AppTokens.cyan,
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  strings.createRoom,
+                                  style: AppTokens.cardTitleStyle,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  strings.createRoomDesc,
+                                  style: AppTokens.bodyStyle,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            color: AppTokens.cyan,
+                            size: 16,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Card 2: Join Room (Guest) - Neutral surface, subtle border, no coral
+                    NeonCard(
+                      borderColor: AppTokens.borderSubtle,
+                      hasGlow: false,
+                      padding: const EdgeInsets.all(18),
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const JoinRoomScreen(),
+                          ),
+                        );
+                      },
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppTokens.surfaceElevated,
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppTokens.borderSubtle,
+                                width: 1.5,
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              strings.joinRoomDesc,
-                              style: const TextStyle(
-                                color: NeonColors.textSecondary,
-                                fontSize: 13,
-                              ),
+                            child: const Icon(
+                              Icons.login_rounded,
+                              color: AppTokens.cyan,
+                              size: 26,
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  strings.joinRoom,
+                                  style: AppTokens.cardTitleStyle,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  strings.joinRoomDesc,
+                                  style: AppTokens.bodyStyle,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            color: AppTokens.cyan,
+                            size: 16,
+                          ),
+                        ],
                       ),
-                      const Icon(
-                        Icons.arrow_forward_ios,
-                        color: NeonColors.cyanX,
-                        size: 16,
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

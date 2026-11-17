@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080611">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="description" content="Join an XO Neon online match with a room code.">
+  <title>XO Neon — دعوة لمباراة</title>
+  <style>
+    :root {
+      --bg: #080611;
+      --surface: #140f26;
+      --surface-2: #1b1530;
+      --cyan: #00e5ff;
+      --pink: #ff3d9a;
+      --text: #f5f2fa;
+      --muted: #b5aec3;
+      --border: rgba(0, 229, 255, 0.28);
+      --danger: #ff6b6b;
+      --success: #6dffb0;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      min-height: 100%;
+      margin: 0;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 15% 10%, rgba(0, 229, 255, 0.14), transparent 34%),
+        radial-gradient(circle at 85% 90%, rgba(255, 61, 154, 0.12), transparent 36%),
+        var(--bg);
+      font-family: system-ui, -apple-system, "Segoe UI", Tahoma, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .card {
+      width: min(100%, 520px);
+      padding: clamp(24px, 6vw, 40px);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: linear-gradient(160deg, rgba(27, 21, 48, 0.98), rgba(20, 15, 38, 0.98));
+      box-shadow:
+        0 0 0 1px rgba(0, 229, 255, 0.06) inset,
+        0 24px 70px rgba(0, 0, 0, 0.55),
+        0 0 60px rgba(0, 229, 255, 0.07);
+      text-align: center;
+    }
+
+    .brand {
+      margin-bottom: 22px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 900;
+      letter-spacing: 0.32em;
+    }
+
+    .brand span { color: var(--cyan); }
+
+    .kicker {
+      margin: 0 0 8px;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 7vw, 38px);
+      line-height: 1.2;
+      letter-spacing: -0.02em;
+    }
+
+    .sub {
+      margin: 12px auto 0;
+      max-width: 36ch;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .code-box {
+      margin: 26px 0 20px;
+      padding: 18px 16px;
+      border: 1px solid rgba(0, 229, 255, 0.22);
+      border-radius: 18px;
+      background: rgba(8, 6, 17, 0.65);
+    }
+
+    .code-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .code {
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: clamp(30px, 9vw, 44px);
+      font-weight: 900;
+      letter-spacing: 0.18em;
+      line-height: 1.1;
+      text-shadow: 0 0 24px rgba(0, 229, 255, 0.35);
+      user-select: all;
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 52px;
+      padding: 14px 18px;
+      border: 1px solid transparent;
+      border-radius: 14px;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 800;
+      text-decoration: none;
+      cursor: pointer;
+      transition: transform 120ms ease, filter 120ms ease, border-color 120ms ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn:active { transform: translateY(1px) scale(0.995); }
+
+    .btn.primary {
+      color: #080611;
+      background: var(--cyan);
+      box-shadow: 0 0 28px rgba(0, 229, 255, 0.28);
+    }
+
+    .btn.primary:hover { filter: brightness(1.06); }
+
+    .btn.secondary {
+      color: var(--text);
+      background: transparent;
+      border-color: rgba(181, 174, 195, 0.35);
+    }
+
+    .btn.secondary:hover { border-color: var(--pink); }
+
+    .btn.disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+
+    .status {
+      min-height: 1.5em;
+      margin: 14px 0 0;
+      color: var(--success);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .note {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .invalid {
+      margin: 24px 0 0;
+      padding: 16px;
+      border: 1px solid rgba(255, 107, 107, 0.45);
+      border-radius: 14px;
+      color: #ffd9d9;
+      background: rgba(255, 107, 107, 0.08);
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .invalid strong { color: var(--danger); }
+
+    .lang-switch {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 24px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(181, 174, 195, 0.16);
+    }
+
+    .lang-switch button {
+      min-width: 78px;
+      min-height: 36px;
+      padding: 6px 12px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      color: var(--muted);
+      background: transparent;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .lang-switch button[aria-pressed="true"] {
+      color: var(--cyan);
+      border-color: var(--border);
+      background: rgba(0, 229, 255, 0.08);
+    }
+
+    footer {
+      margin-top: 16px;
+      color: rgba(181, 174, 195, 0.65);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+    }
+
+    html[data-lang="ar"] .en { display: none !important; }
+    html[data-lang="en"] .ar { display: none !important; }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">XO <span>NEON</span></div>
+
+    <p class="kicker ar">دعوة لمباراة</p>
+    <p class="kicker en">Match Invite</p>
+
+    <h1 class="ar">انضم إلى غرفتي</h1>
+    <h1 class="en">Join my room</h1>
+
+    <p class="sub ar">استخدم رمز الغرفة أدناه للانضمام إلى المباراة.</p>
+    <p class="sub en">Use the room code below to join the match.</p>
+
+    <div id="validContent">
+      <div class="code-box">
+        <span class="code-label ar">رمز الغرفة</span>
+        <span class="code-label en">Room code</span>
+        <div id="code" class="code" dir="ltr">------</div>
+      </div>
+
+      <div class="actions">
+        <a id="openApp" class="btn primary" href="#">
+          <span class="ar">افتح التطبيق</span>
+          <span class="en">Open in App</span>
+        </a>
+        <button id="copyBtn" class="btn secondary" type="button">
+          <span id="copyAr" class="ar">نسخ الرمز</span>
+          <span id="copyEn" class="en">Copy code</span>
+        </button>
+      </div>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+
+      <p class="note ar">إذا لم يفتح التطبيق، تأكد من تثبيت XO Neon ثم أدخل رمز الغرفة يدويًا.</p>
+      <p class="note en">If the app doesn't open, make sure XO Neon is installed, then enter the room code manually.</p>
+    </div>
+
+    <div id="invalid" class="invalid" hidden>
+      <p class="ar"><strong>رابط الدعوة غير صالح.</strong> اطلب من المضيف رمز غرفة جديدًا.</p>
+      <p class="en"><strong>This invite link is invalid.</strong> Ask the host for a new room code.</p>
+    </div>
+
+    <div class="lang-switch" role="group" aria-label="Language">
+      <button type="button" data-set-lang="ar" aria-pressed="true">العربية</button>
+      <button type="button" data-set-lang="en" aria-pressed="false">English</button>
+    </div>
+
+    <footer>XO NEON • LOCAL &amp; ONLINE PLAY</footer>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const CODE_PATTERN = /^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/;
+      const params = new URLSearchParams(window.location.search);
+      const rawCode = (params.get('code') || '').replace(/\s+/g, '').toUpperCase();
+      const code = rawCode;
+      const valid = CODE_PATTERN.test(code);
+
+      const codeEl = document.getElementById('code');
+      const openApp = document.getElementById('openApp');
+      const copyBtn = document.getElementById('copyBtn');
+      const copyAr = document.getElementById('copyAr');
+      const copyEn = document.getElementById('copyEn');
+      const statusEl = document.getElementById('status');
+      const validContent = document.getElementById('validContent');
+      const invalid = document.getElementById('invalid');
+      const langButtons = Array.from(document.querySelectorAll('[data-set-lang]'));
+
+      const setLang = (lang) => {
+        const next = lang === 'en' ? 'en' : 'ar';
+        document.documentElement.lang = next;
+        document.documentElement.dir = next === 'ar' ? 'rtl' : 'ltr';
+        document.documentElement.dataset.lang = next;
+        langButtons.forEach((button) => {
+          button.setAttribute('aria-pressed', String(button.dataset.setLang === next));
+        });
+        if (valid) {
+          document.title = next === 'en'
+            ? `XO Neon — Room ${code}`
+            : `XO Neon — غرفة ${code}`;
+        } else {
+          document.title = next === 'en'
+            ? 'XO Neon — Invalid invite'
+            : 'XO Neon — دعوة غير صالحة';
+        }
+      };
+
+      if (!valid) {
+        codeEl.textContent = '------';
+        validContent.hidden = true;
+        invalid.hidden = false;
+        openApp.removeAttribute('href');
+        openApp.classList.add('disabled');
+        openApp.setAttribute('aria-disabled', 'true');
+        copyBtn.disabled = true;
+      } else {
+        codeEl.textContent = code;
+        openApp.href = `xoneon://join?code=${encodeURIComponent(code)}`;
+        copyBtn.disabled = false;
+      }
+
+      // On Android, Chrome-family browsers can hand off a custom scheme more
+      // reliably through an intent:// URL. Other browsers keep the plain
+      // xoneon:// href above.
+      openApp.addEventListener('click', (event) => {
+        if (!valid) return;
+        if (!/Android/i.test(navigator.userAgent)) return;
+        event.preventDefault();
+        const fallback = encodeURIComponent(window.location.href);
+        window.location.href =
+          `intent://join?code=${encodeURIComponent(code)}#Intent;` +
+          'scheme=xoneon;' +
+          'package=com.antigravity.xo.xo_neon_app;' +
+          `S.browser_fallback_url=${fallback};end`;
+      });
+
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(code);
+        } catch {
+          const area = document.createElement('textarea');
+          area.value = code;
+          area.setAttribute('readonly', '');
+          area.style.position = 'fixed';
+          area.style.opacity = '0';
+          document.body.appendChild(area);
+          area.select();
+          try { document.execCommand('copy'); } catch {}
+          area.remove();
+        }
+
+        const oldAr = copyAr.textContent;
+        const oldEn = copyEn.textContent;
+        copyAr.textContent = 'تم النسخ!';
+        copyEn.textContent = 'Copied!';
+        statusEl.textContent = document.documentElement.lang === 'en'
+          ? 'Room code copied.'
+          : 'تم نسخ رمز الغرفة.';
+
+        window.setTimeout(() => {
+          copyAr.textContent = oldAr;
+          copyEn.textContent = oldEn;
+          statusEl.textContent = '';
+        }, 1600);
+      });
+
+      langButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const next = button.dataset.setLang === 'en' ? 'en' : 'ar';
+          params.set('lang', next);
+          const query = params.toString();
+          window.history.replaceState(null, '', query ? `?${query}` : window.location.pathname);
+          setLang(next);
+        });
+      });
+
+      setLang(params.get('lang') === 'en' ? 'en' : 'ar');
+    })();
+  </script>
+</body>
+</html>

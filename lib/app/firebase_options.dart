@@ -24,9 +24,9 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDemo-WebApiKeyPlaceholderForXoNeon',
-    appId: '1:100000000000:web:abcdef1234567890',
-    messagingSenderId: '100000000000',
+    apiKey: 'AIzaSyAPRCI3zZxN4GjD3O2XVAtG5D0RmgYyagE',
+    appId: '1:529380866939:web:968170d053e18d88791bde',
+    messagingSenderId: '529380866939',
     projectId: 'xo-neon-online',
     authDomain: 'xo-neon-online.firebaseapp.com',
     databaseURL: 'https://xo-neon-online-default-rtdb.firebaseio.com',
@@ -34,18 +34,18 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDemo-AndroidApiKeyPlaceholderForXoNeon',
-    appId: '1:100000000000:android:abcdef1234567890',
-    messagingSenderId: '100000000000',
+    apiKey: 'AIzaSyBax8MOmBZVLZuQUzyzkBo0P1vg0SzTLTo',
+    appId: '1:529380866939:android:e24155eb01c74fa7791bde',
+    messagingSenderId: '529380866939',
     projectId: 'xo-neon-online',
     databaseURL: 'https://xo-neon-online-default-rtdb.firebaseio.com',
     storageBucket: 'xo-neon-online.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDemo-IosApiKeyPlaceholderForXoNeon',
-    appId: '1:100000000000:ios:abcdef1234567890',
-    messagingSenderId: '100000000000',
+    apiKey: 'AIzaSyD6zysK9TXdt1TPWR7Yaq4GHAbVyAmHMSI',
+    appId: '1:529380866939:ios:fd681c04adad0965791bde',
+    messagingSenderId: '529380866939',
     projectId: 'xo-neon-online',
     databaseURL: 'https://xo-neon-online-default-rtdb.firebaseio.com',
     storageBucket: 'xo-neon-online.appspot.com',
@@ -53,9 +53,9 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDemo-WindowsApiKeyPlaceholderForXoNeon',
-    appId: '1:100000000000:web:abcdef1234567890',
-    messagingSenderId: '100000000000',
+    apiKey: 'AIzaSyAPRCI3zZxN4GjD3O2XVAtG5D0RmgYyagE',
+    appId: '1:529380866939:web:968170d053e18d88791bde',
+    messagingSenderId: '529380866939',
     projectId: 'xo-neon-online',
     authDomain: 'xo-neon-online.firebaseapp.com',
     databaseURL: 'https://xo-neon-online-default-rtdb.firebaseio.com',

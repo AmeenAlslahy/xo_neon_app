@@ -4,13 +4,12 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/firebase_options.dart';
-import '../../game/domain/logic/game_board.dart';
-import '../../game/domain/logic/win_evaluator.dart';
-import '../../game/domain/models/board_config.dart';
+import '../domain/logic/online_transactions.dart';
 import '../../game/domain/models/cell_position.dart';
 import '../../game/domain/models/player.dart';
 import '../domain/models/online_game_state.dart';
 import '../domain/models/room_code.dart';
+import '../domain/models/room_config.dart';
 import '../domain/models/room_model.dart';
 
 /// Service coordinating real-time move submissions, board evaluation, and
@@ -64,113 +63,74 @@ class OnlineMatchService {
     });
   }
 
-  /// Submits a player's move, validates turn, checks for victory lines,
-  /// and updates the shared match state in RTDB.
-  Future<bool> submitMove({
+  /// Submits a player's move atomically using runTransaction, validating turn,
+  /// cell vacancy, and evaluating victory lines inside the transaction.
+  Future<SubmitMoveResult> submitMove({
     required RoomModel room,
     required Position position,
     required Player player,
   }) async {
     final normalized = RoomCode.normalize(room.code);
     final gameRef = _db.ref('rooms/$normalized/game');
-    final snapshot = await gameRef.get();
 
-    if (!snapshot.exists || snapshot.value is! Map) {
-      return false;
-    }
+    try {
+      final transactionResult = await gameRef.runTransaction((currentData) {
+        // Empty local cache: let the SDK fetch the game and rerun the handler.
+        if (currentData == null) {
+          return Transaction.success(currentData);
+        }
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final outcome = evaluateSubmitMoveTransaction(
+          currentData: currentData,
+          position: position,
+          player: player,
+          room: room,
+          nowMs: now,
+        );
 
-    final current = OnlineGameState.fromMap(snapshot.value as Map);
+        return switch (outcome) {
+          SubmitMoveTransactionAbort() => Transaction.abort(),
+          SubmitMoveTransactionSuccess(:final nextMap) =>
+            Transaction.success(nextMap),
+        };
+      });
 
-    // Guard: Game must be actively playing
-    if (current.status != OnlineGameStatus.playing) {
-      return false;
-    }
-
-    // Guard: Must be the submitting player's turn
-    if (current.currentTurn != player) {
-      return false;
-    }
-
-    // Guard: Cell must not already be occupied
-    final alreadyTaken = current.moves.any(
-      (m) => m.row == position.row && m.col == position.col,
-    );
-    if (alreadyTaken) {
-      return false;
-    }
-
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final newMove = OnlineMove(
-      row: position.row,
-      col: position.col,
-      player: player,
-      timestampMs: now,
-    );
-
-    final updatedMoves = [...current.moves, newMove];
-
-    final boardConfig = BoardConfig(
-      rows: room.config.boardSize,
-      cols: room.config.boardSize,
-      winStreak: room.config.winStreak,
-    );
-
-    // Reconstruct domain GameBoard to evaluate winning line
-    var board = GameBoard.empty(boardConfig);
-    for (final m in updatedMoves) {
-      board = board.copyWithMove(m.position, m.player);
-    }
-
-    // Evaluate for victory using the pure domain WinEvaluator
-    const evaluator = WinEvaluator();
-    final winLines = evaluator.findAllWinningLinesFromMove(
-      board: board,
-      lastMove: position,
-      player: player,
-    );
-
-    OnlineGameStatus nextStatus;
-    Player? roundWinner;
-    List<Position>? winningPositions;
-    int nextHostScore = current.hostScore;
-    int nextGuestScore = current.guestScore;
-
-    if (winLines.isNotEmpty) {
-      roundWinner = player;
-      winningPositions = winLines.first.positions;
-
-      if (player == Player.x) {
-        nextHostScore++;
-      } else {
-        nextGuestScore++;
+      if (transactionResult.committed) {
+        final snapVal = transactionResult.snapshot.value;
+        if (snapVal is Map) {
+          return SubmitMoveSuccess(OnlineGameState.fromMap(snapVal));
+        }
       }
 
-      final isMatchOver = nextHostScore >= room.config.roundsToWin ||
-          nextGuestScore >= room.config.roundsToWin;
+      // If aborted / not committed: pure post-transaction state derivation
+      // 1. Check if the snapshot at transaction abort showed turn mismatch
+      final abortedSnapVal = transactionResult.snapshot.value;
+      if (abortedSnapVal is Map) {
+        final abortedGame = OnlineGameState.fromMap(abortedSnapVal);
+        if (abortedGame.currentTurn != player) {
+          return const SubmitMoveFailure(SubmitMoveFailureReason.notYourTurn);
+        }
+      }
 
-      nextStatus =
-          isMatchOver ? OnlineGameStatus.matchOver : OnlineGameStatus.roundWon;
-    } else if (board.isFull) {
-      nextStatus = OnlineGameStatus.roundDraw;
-    } else {
-      nextStatus = OnlineGameStatus.playing;
+      // 2. Check latest game node in database
+      final latestSnap = await gameRef.get();
+      if (!latestSnap.exists || latestSnap.value is! Map) {
+        return const SubmitMoveFailure(SubmitMoveFailureReason.gameMissing);
+      }
+      final latestGame = OnlineGameState.fromMap(latestSnap.value as Map);
+      if (latestGame.status != OnlineGameStatus.playing) {
+        return const SubmitMoveFailure(SubmitMoveFailureReason.notPlaying);
+      }
+      if (latestGame.moves.any((m) => m.row == position.row && m.col == position.col)) {
+        return const SubmitMoveFailure(SubmitMoveFailureReason.cellTaken);
+      }
+      if (latestGame.currentTurn != player) {
+        return const SubmitMoveFailure(SubmitMoveFailureReason.notYourTurn);
+      }
+      return const SubmitMoveFailure(SubmitMoveFailureReason.transactionAborted);
+    } catch (_) {
+      return const SubmitMoveFailure(SubmitMoveFailureReason.transactionAborted);
     }
-
-    final nextTurn = player.other;
-
-    final nextState = current.copyWith(
-      moves: updatedMoves,
-      currentTurn: nextTurn,
-      status: nextStatus,
-      roundWinner: roundWinner,
-      winningPositions: winningPositions,
-      hostScore: nextHostScore,
-      guestScore: nextGuestScore,
-      lastUpdatedMs: now,
-    );
-
-    await gameRef.set(nextState.toMap());
-    return true;
   }
 
   /// Advances match to the next round, alternating the starter.
@@ -197,6 +157,38 @@ class OnlineMatchService {
     );
 
     await gameRef.set(nextRoundState.toMap());
+  }
+
+  /// Resets the match on the same room for a rematch, resetting round, scores,
+  /// and moves to initial state, optionally applying a [newConfig].
+  Future<void> rematch({
+    required RoomModel room,
+    RoomConfig? newConfig,
+  }) async {
+    final normalized = RoomCode.normalize(room.code);
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    final initialGame = OnlineGameState(
+      currentRound: 1,
+      currentTurn: Player.x,
+      hostScore: 0,
+      guestScore: 0,
+      moves: const [],
+      status: OnlineGameStatus.playing,
+      lastUpdatedMs: now,
+    );
+
+    final updates = <String, dynamic>{
+      'rooms/$normalized/status': RoomStatus.inGame.name,
+      'rooms/$normalized/lastActiveMs': now,
+      'rooms/$normalized/game': initialGame.toMap(),
+    };
+
+    if (newConfig != null) {
+      updates['rooms/$normalized/config'] = newConfig.toMap();
+    }
+
+    await _db.ref().update(updates);
   }
 }
 

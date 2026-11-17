@@ -118,7 +118,7 @@ void main() {
       expect(find.byType(PlayerTurnHeader), findsOneWidget);
       expect(find.text('اللاعب X'), findsOneWidget);
       expect(find.text('اللاعب O'), findsOneWidget);
-      expect(find.text('٣×٣ • ٣ للفوز'), findsOneWidget);
+      expect(find.text('لوحة ٣×٣ · ٣ على التوالي'), findsOneWidget);
 
       // Verify demo timer is removed
       expect(find.text('مؤقت تجريبي: ١٥ث'), findsNothing);
@@ -388,20 +388,19 @@ void main() {
       await tester.pumpWidget(buildTestableWidget());
       await tester.pumpAndSettle();
 
-      // Tap Pause icon in app bar
-      await tester.tap(find.widgetWithIcon(IconButton, Icons.pause_rounded));
+      // Tap Pause in bottom control bar
+      await tester.tap(find.byIcon(Icons.pause_rounded));
       await tester.pumpAndSettle();
 
       // Verify match paused banner
-      expect(find.text('المباراة متوقفة مؤقتاً'), findsOneWidget);
-      expect(find.text('تم إيقاف المؤقت وحركات المباراة. اضغط استئناف للمتابعة.'), findsOneWidget);
+      expect(find.text('المباراة متوقفة'), findsOneWidget);
 
       // Tap Resume button
       await tester.tap(find.text('استئناف اللعب').first);
       await tester.pumpAndSettle();
 
       // Match resumed
-      expect(find.text('المباراة متوقفة مؤقتاً'), findsNothing);
+      expect(find.text('المباراة متوقفة'), findsNothing);
     });
 
     testWidgets('chess-clock timer displays clocks in HUD when enabled', (tester) async {
@@ -453,7 +452,7 @@ void main() {
       // Find zoom-in button
       final zoomButton = find.byIcon(Icons.zoom_in);
       expect(zoomButton, findsOneWidget);
-      expect(find.text('تكبير الرقعة للّمس الدقيق'), findsOneWidget);
+      expect(find.text('تكبير الرقعة'), findsOneWidget);
 
       // Tap to Zoom In
       await tester.tap(zoomButton);
@@ -461,7 +460,7 @@ void main() {
 
       // Button toggles to reset 1x
       expect(find.byIcon(Icons.zoom_out_map), findsOneWidget);
-      expect(find.text('إعادة الرؤية كاملة (1x)'), findsOneWidget);
+      expect(find.text('إعادة ضبط الرؤية'), findsOneWidget);
 
       // Tap reset view
       await tester.tap(find.byIcon(Icons.zoom_out_map));
