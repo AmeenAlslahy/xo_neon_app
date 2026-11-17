@@ -104,5 +104,5 @@ dart analyze lib test
 
 ## معلومات المطوّر
 
-- **المطوّر:** أمين السلاحي (Ameen Alslahy)
+- **المطوّر:** أمين الصلاحي (Ameen Alslahy)
 - **المستودع:** [AmeenAlslahy/xo_neon_app](https://github.com/AmeenAlslahy/xo_neon_app)
